@@ -1,2 +1,2 @@
 # scala-exercises
-Scala 3 bits and pieces
+Scala 3 Bits and Pieces
