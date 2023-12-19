@@ -1,4 +1,4 @@
-package org.sanssushi.demo.effects
+package org.sanssushi.sandbox.effects
 
 class MySuite extends munit.FunSuite:
 

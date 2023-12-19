@@ -1,4 +1,4 @@
-package org.sanssushi.demo.effects
+package org.sanssushi.sandbox.effects
 
 import cats.effect.{Async, IO, IOApp, Temporal}
 import cats.syntax.applicativeError.*
@@ -7,50 +7,13 @@ import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.parallel.*
 import cats.{Applicative, Defer, Parallel}
-import org.sanssushi.demo.effects.F.util.*
+import F.util.*
 
 import scala.concurrent.duration.*
 import scala.util.Random
 
-/**
- * In essence, what are effect types like IO[_] about?
- *
- * But first, what is an effect in computer programs?
- *
- * Every computation that isn't a pure function call is effectful, that is, every function that cannot
- * be memoized or, in other words, who's result cannot be stored and used later instead of calling
- * the function again, e.g. readChar().
- *
- * All real world programs are full of effects: taking user input, writing stuff into
- * the database, locking a shared resource, creating a timestamp, waiting for an asynchronous
- * computation to complete and so on and so forth.
- *
- * By deferring the execution of an effectful computation and wrapping it in a monadic structure,
- * effect types allow us to compose complex effects from simpler ones in a pure functional manner,
- * just like we can compose complex pure functions from simple ones.
- *
- * As a result IO[A] can represent a http request, locking a resource, an asynchronous computation,
- * a database transaction, you name it.
- *
- * And of course, the effect system (monix, cats-effect, zio, ...) that ultimately implements
- * the effect type (e.g. IO[_]) and runs the effect will provide many convenience methods and
- * predefined effects that'll make development easier.
- *
- * As an example for effect composition we're composing a
- * [[https://en.wikipedia.org/wiki/Semaphore_(programming) Wikipedia:Semaphore]] from simpler effects.
- *
- * You find the cats-effect version of the effects written here referenced in the scaladoc if available.
- *
- * A generic effect type F[_] allows us to focus on the abstract structure and remove the specifics
- * of concrete effect types as much as possible.
- *
- * The effect composition is shown in Effects.scala. Some common effects and utils are put in F.scala.
- *
- * For error handling we directly use .onError() and .recover() on the effects, they are provided by
- * [[cats.ApplicativeThrow]] / [[cats.MonadThrow]]. For parallel traversal [[cats.Parallel]]. (Those are effects, too,
- * but reside in the cats library.)
- *
- */
+/** For this demo use case we make direct use `onError()` and `recover()` by
+ * [[cats.ApplicativeError]]. For parallel traversal we directly use `parTraverse()` by [[cats.Parallel]]. */
 object Main extends IOApp.Simple:
 
   /** Simple file resource.

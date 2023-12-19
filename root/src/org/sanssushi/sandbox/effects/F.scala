@@ -1,4 +1,4 @@
-package org.sanssushi.demo.effects
+package org.sanssushi.sandbox.effects
 
 import cats.effect.{Async, Spawn, Temporal}
 import cats.syntax.flatMap.*
