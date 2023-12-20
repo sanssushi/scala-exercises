@@ -43,7 +43,7 @@ object F:
 
   /** Semantic blocking for a given duration. */
   def sleep[F[_] : Temporal](duration: Duration): F[Unit] =
-    // Temporal[F] is a type class by cats effect, but Monix and ZIO provide implementations for it
+    // Temporal[F] is a type class by cats effect, but Monix and ZIO provide implementations
     Temporal[F].sleep(duration)
 
   /** Semantic blocking forever. */
@@ -77,7 +77,7 @@ object F:
         loop(math.max(0, times), F.pure(Monoid[A].empty))
 
       /** Error if computation takes longer than a given duration */
-      def timeout(duration: Duration)(using Defer[F], Temporal[F], Spawn[F]): F[A] =
+      def timeout(duration: Duration)(using Defer[F], Async[F]): F[A] =
         race(sleep(duration), fa).flatMap:
           case Left(_) => error[F, A]("<timeout>")
           case Right(a) => F.pure(a)

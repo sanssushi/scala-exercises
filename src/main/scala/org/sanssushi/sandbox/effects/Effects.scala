@@ -2,12 +2,13 @@ package org.sanssushi.sandbox.effects
 
 import cats.effect.Async
 import cats.syntax.applicativeError.*
-import cats.syntax.apply.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.{Applicative, Defer, MonadThrow}
+import org.sanssushi.sandbox.effects.F.util.*
 
 import scala.concurrent.Promise
+import scala.concurrent.duration.Duration
 
 /** Effect 1. Atomic access to a shared mutable state.
  *
@@ -120,15 +121,19 @@ trait Semaphore[F[_], +R] extends Mutex[F, R]:
   /** The level of granularity at which the [[Semaphore]] controls the concurrency. */
   def maxPermits: Int
 
-  /** Acquire n permits and gain privileged access to a limited resource of type R. */
-  def permits[A](n: Int)(f: R => F[A]): F[A]
+  /** Default timeout for acquiring permits. */
+  def defaultTimeout: Duration
+
+  /** Acquire n permits and gain privileged access to a limited resource of type R.
+   * Timeout for accessing resource.*/
+  def permits[A](n: Int, timeout: Duration = defaultTimeout)(f: R => F[A]): F[A]
 
   /** Acquire a single permit and gain access to a limited resource of type R. */
   def permit[A](f: R => F[A]): F[A] = permits(1)(f)
 
   /** Acquire the maximum amount of permits and gain exclusive access to a limited resource of type R. */
   override def lock[A](f: R => F[A]): F[A] = permits(maxPermits)(f)
-
+  
 object Semaphore:
 
   import scala.collection.immutable.{HashSet, Queue}
@@ -168,7 +173,7 @@ object Semaphore:
         case Some(request) if grantedPermits + request.size <= maxPermits => Some(issueNext, request)
         case _ => None
 
-  object State:
+  private object State:
 
     private[Semaphore] def apply[F[_] : Defer : Applicative](maxPermits: Int): F[Reference[F, State[F]]] =
       // uses Reference for thread safe state updates
@@ -176,9 +181,10 @@ object Semaphore:
 
   /** Factory method. Note, creating an instance of [[Semaphore]] is effectful, too.
    * @param _maxPermits the level of granularity at which the [[Semaphore]] controls the concurrency.
+   * @param _defaultTimeout default timeout for using resource (incl. waiting for access)
    * @param fr the limited resource
    */
-  def apply[F[_] : Async, R](_maxPermits: Int)(fr: F[R]): F[Semaphore[F, R]] =
+  def apply[F[_] : Async, R](_maxPermits: Int, _defaultTimeout: Duration)(fr: F[R]): F[Semaphore[F, R]] =
     for
       resource <- fr
       state <- State(math.max(1, _maxPermits))
@@ -191,7 +197,8 @@ object Semaphore:
         def run(action: StateAction): F[Unit] = state.modify(action orElse doNothing).flatten
         def update(f: State[F] => State[F]): StateAction = state => (f(state), run(grantPermitRequestsMaybe))
 
-        override val maxPermits: Int = math.max(1, _maxPermits)
+        override lazy val maxPermits: Int = math.max(1, _maxPermits)
+        override lazy val defaultTimeout: Duration = _defaultTimeout
 
         val grantPermitRequestsMaybe: StateAction = ((state: State[F]) =>
           state.grantPermitsMaybe.map:
@@ -216,9 +223,10 @@ object Semaphore:
             _ <- run(update(state => state.enqueue(permits)))
           yield permits
 
-        override def permits[A](n: Int)(f: R => F[A]): F[A] =
+        override def permits[A](n: Int, timeout: Duration = defaultTimeout)(f: R => F[A]): F[A] =
           // uses Resource to manage permit lifecycle:
-          // create permit request - acquire permits - release permits / cancel request)
-          Resource(enqueuePermitRequest(n))(releasePermitsOrCancelRequest).use(_.acquirePermits *> f(resource))
+          // create permit request - acquire permits and set timeout - release permits / cancel request)
+          Resource(enqueuePermitRequest(n))(releasePermitsOrCancelRequest)
+            .use(permitRequest => (permitRequest.acquirePermits >> f(resource)).timeout(timeout))
 
 end Semaphore
