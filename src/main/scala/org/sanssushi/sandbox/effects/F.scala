@@ -1,17 +1,17 @@
 package org.sanssushi.sandbox.effects
 
-import cats.effect.{Async, Spawn, Temporal}
+import cats.effect.{Async, Spawn, Sync, Temporal}
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.monoid.*
-import cats.{Applicative, ApplicativeThrow, Defer, Functor, Monad, MonadThrow, Monoid}
+import cats.{Applicative, ApplicativeThrow, Defer, Functor, Monad, Monoid}
 
 import scala.annotation.tailrec
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 
-/** Lift any value or computation into F[_] plus some basic effects and utils */
+/** Lift any value or computation into F[_] plus some basic effects and utils. */
 object F:
 
   /** Lift a pure value of type A into effect type F[_]. */
@@ -20,30 +20,28 @@ object F:
 
   /** Create a F[Unit]. */
   def unit[F[_] : Applicative]: F[Unit] =
-    F.pure(())
+    pure(())
 
   /** Lift a computation of type A into effect type F[_]:
    * <li>The computation is deferred until the evaluation of F[A].
    * <li>The computation is re-evaluated with every evaluation of F[A]. */
-  def delay[F[_] : Defer : Applicative, A](a: => A): F[A] =
-    Defer[F].defer(F.pure(a))
+  def delay[F[_] : Sync, A](a: => A): F[A] =
+    Sync[F].delay(a)
 
   /** Adapt any asynchronous computation of type A and wrap it as F[A]. */
-  def async[F[_] : Async, A](fa: => Future[A]): F[A] =
-    // Async[F] is a type class by cats effect, but Monix and ZIO provide implementations for it
-    Async[F].fromFuture(delay(fa))
+  def async[F[_] : Async, A](fa: Future[A]): F[A] =
+    Async[F].fromFuture(pure(fa))
 
   /** Return whichever computation finished first. */
   def race[F[_] : Spawn, A, B](fa: F[A], fb: F[B]): F[Either[A, B]] =
     Spawn[F].race(fa, fb)
   
   /** Wrap a runtime exception into the effect type F[_]. */
-  def error[F[_] : Defer : ApplicativeThrow, A](msg: String) : F[A] =
-    F.delay(throw RuntimeException(msg))
+  def error[F[_] : ApplicativeThrow, A](msg: String) : F[A] =
+    ApplicativeThrow[F].raiseError(new RuntimeException(msg))
 
   /** Semantic blocking for a given duration. */
   def sleep[F[_] : Temporal](duration: Duration): F[Unit] =
-    // Temporal[F] is a type class by cats effect, but Monix and ZIO provide implementations
     Temporal[F].sleep(duration)
 
   /** Semantic blocking forever. */
@@ -51,12 +49,12 @@ object F:
     sleep(Duration.Inf)
   
   /** Create a random number between 0.0 and 1.0. */
-  def random[F[_] : Defer : Applicative]: F[Double] =
-    F.delay(scala.util.Random.nextDouble())
+  def random[F[_] : Sync]: F[Double] =
+    delay(scala.util.Random.nextDouble())
 
   /** System time in ms. */
-  def timestamp[F[_] : Defer : Applicative]: F[Long] =
-    F.delay(System.currentTimeMillis)
+  def timestamp[F[_] : Sync]: F[Long] =
+    delay(System.currentTimeMillis)
 
   object util:
 
@@ -74,7 +72,7 @@ object F:
           if n == 0 then acc
           else loop(n - 1, acc.flatMap(as => fa.map(a => as |+| a)))
 
-        loop(math.max(0, times), F.pure(Monoid[A].empty))
+        loop(n = math.max(0, times), F.pure(Monoid[A].empty))
 
       /** Error if computation takes longer than a given duration */
       def timeout(duration: Duration)(using Defer[F], Async[F]): F[A] =
@@ -89,7 +87,7 @@ object F:
           a
 
       /** Log the value of F[A] and the duration it took compute to stdout. */
-      def measure(using Defer[F], Monad[F]): F[A] =
+      def measure(using Sync[F]): F[A] =
         for
           start <- timestamp
           a <- fa
@@ -100,7 +98,7 @@ object F:
 
       /** Maybe create an error instead of evaluating the value of type A.
        * The likelihood of failure is given in percent. */
-      def failMaybe(likelihoodPercent: Int = 50, msg: String = "<failed>")(using Defer[F], MonadThrow[F]): F[A] =
+      def failMaybe(likelihoodPercent: Int = 50, msg: String = "<failed>")(using Sync[F]): F[A] =
         val likelihoodOfError = math.min(math.max(0, likelihoodPercent), 100) * 0.01
         for
           rand <- random[F]

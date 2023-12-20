@@ -1,10 +1,11 @@
 package org.sanssushi.sandbox.effects
 
-import cats.effect.Async
+import cats.effect.{Async, Sync}
 import cats.syntax.applicativeError.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
-import cats.{Applicative, Defer, MonadThrow}
+import cats.syntax.apply.*
+import cats.{Applicative, MonadThrow}
 import org.sanssushi.sandbox.effects.F.util.*
 
 import scala.concurrent.Promise
@@ -28,13 +29,13 @@ object Reference:
   /** Factory method. Wraps a pure value as initial value of a new [[Reference]].
    *
    * Note, creating an instance of [[Reference]] is effectful, too. */
-  def pure[F[_] : Defer : Applicative, S](s: S): F[Reference[F, S]] =
+  def pure[F[_] : Sync, S](s: S): F[Reference[F, S]] =
     Reference(Applicative[F].pure(s))
 
   /** Factory method. Wraps the result of an effectful computation as initial value of a new [[Reference]].
    *
    * Note, creating an instance of [[Reference]] is effectful, too. */
-  def apply[F[_] : Defer : Applicative, S](fs: F[S]): F[Reference[F, S]] =
+  def apply[F[_] : Sync, S](fs: F[S]): F[Reference[F, S]] =
     fs.map: r =>
       new Reference[F, S]:
         // implementation wraps java AtomicReference
@@ -97,11 +98,8 @@ object Resource:
   def apply[F[_] : MonadThrow, R](create: F[R])(release: R => F[Unit]): Resource[F, R] =
     new Resource[F, R]:
       override def use[A](use: R => F[A]): F[A] =
-        for
-          r <- create
-          b <- use(r).onError(_ => release(r))
-          _ <- release(r)
-        yield b
+        create.flatMap: r =>
+          use(r).onError(_ => release(r)) <* release(r)
 
 /** Effect 4. Locking a resource.
  *
@@ -121,11 +119,17 @@ trait Semaphore[F[_], +R] extends Mutex[F, R]:
   /** The level of granularity at which the [[Semaphore]] controls the concurrency. */
   def maxPermits: Int
 
-  /** Default timeout for acquiring permits. */
+  /** Default timeout for accessing resource (incl. acquiring permits). */
   def defaultTimeout: Duration
 
   /** Acquire n permits and gain privileged access to a limited resource of type R.
    * Timeout for accessing resource.*/
+
+  /** Acquire permits to use resource
+   * @param n the number of permits to acquire
+   * @param timeout timeout for acquiring permits and using resource
+   * @param f use resource
+   */
   def permits[A](n: Int, timeout: Duration = defaultTimeout)(f: R => F[A]): F[A]
 
   /** Acquire a single permit and gain access to a limited resource of type R. */
@@ -175,7 +179,7 @@ object Semaphore:
 
   private object State:
 
-    private[Semaphore] def apply[F[_] : Defer : Applicative](maxPermits: Int): F[Reference[F, State[F]]] =
+    private[Semaphore] def apply[F[_] : Sync](maxPermits: Int): F[Reference[F, State[F]]] =
       // uses Reference for thread safe state updates
       Reference.pure(State[F](maxPermits, Queue.empty, 0, HashSet.empty))
 

@@ -1,39 +1,38 @@
 package org.sanssushi.sandbox.effects
 
-import cats.effect.{Async, IO, IOApp, Temporal}
+import cats.effect.{Async, IO, IOApp}
 import cats.syntax.applicativeError.*
 import cats.syntax.apply.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.parallel.*
-import cats.{Applicative, Defer, Parallel}
-import F.util.*
+import cats.{Defer, Parallel}
+import org.sanssushi.sandbox.effects.F.util.*
 
 import scala.concurrent.duration.*
 import scala.util.Random
 
-/** For this demo use case we make direct use `onError()` and `recover()` by
- * [[cats.ApplicativeError]]. For parallel traversal we directly use `parTraverse()` by [[cats.Parallel]]. */
 object Main extends IOApp.Simple:
 
-  // at the outermost boundary of the program we pinpoint F[_] to cats.effect.IO (could as well be ZIO or Monix Task)
+  // at the outermost boundary of the program we pinpoint F[_] to
+  // cats.effect.IO (could as well be ZIO or Monix Task)
   override def run: IO[Unit] =
     semaphoreDemo[IO]
 
   /** Simple file resource.
    *
-   * Can be closed. readChar takes 200ms and fails with a likelihood of 2% */
+   * Can be closed. readChar takes 200ms and fails with a likelihood of 3% */
   trait File[F[_]]:
     def readChar: F[Char]
     def close: F[Unit]
 
   object File:
-    def open[F[_] : Defer : Applicative : Temporal](path: String): F[File[F]] =
+    def open[F[_] : Async](path: String): F[File[F]] =
       Reference.pure[F, Boolean](true).map: open =>
         new File[F]:
           override def readChar: F[Char] = open.get.flatMap: isOpen =>
             if isOpen
-            then F.sleep(200.millis) *> F.delay(Random.between(32, 127)).map(_.toChar).failMaybe(2, "<io error>")
+            then F.sleep(200.millis) *> F.delay(Random.between(32, 127)).map(_.toChar).failMaybe(3, "<io error>")
             else F.error[F, Char]("<file closed>")
           override def close: F[Unit] = open.set(false)
 
@@ -65,22 +64,19 @@ object Main extends IOApp.Simple:
 
       val numberOfTasks = 20
       val numberOfPermits = 20
-      val taskTimeout = 10.seconds
+      val timeout = 10.seconds
 
       // control file lifecycle via Resource
-      Resource(File.open(path))(_.close >> F.pure("file closed.").log.unit).use(file =>
-        for
-          semaphore <- Semaphore(numberOfPermits, _defaultTimeout = 40.seconds)(F.pure(file))
-          result <- (1 to numberOfTasks).toList.parTraverse(id =>
+      Resource(File.open(path))(_.close >> F.pure("file closed.").log.unit).use: file =>
+        // create a semaphore
+        Semaphore(numberOfPermits, _defaultTimeout = timeout)(F.pure(file)).flatMap: semaphore =>
+          // create some tasks using default timeout
+          (1 to numberOfTasks).toList.parTraverse: id =>
             val permits = id
-            // create task: control file access via Semaphore
-            task(id, callback => semaphore.permits(permits, taskTimeout)(file => callback(file.readChar)))
-              .map(c => (id, s"\"$c\"")) // collect result
-              .recover(t => (id, t.getMessage)) // recover from error
-          )
-          _ <- F.pure("done traversing.").log
-        yield result
-      )
+            // acquire permits for task
+            task(id, callback => semaphore.permits(permits)(file => callback(file.readChar)))
+              .map(c => (id, s"\"$c\""))
+              .recover(t => (id, t.getMessage))
 
     controlConcurrentTasks("//my/file").measure.unit
 
