@@ -12,18 +12,29 @@ object Test extends IOTestSuite:
   test("increments are atomic"):
 
     def incAndGet(ref: Reference[IO, Int]): IO[Int] = ref.updateAndGet(x => x + 1)
-    val oneTo100k = (1 to 100000).toList
+    val n = 100000
+    val oneToN = (1 to n).toList
 
     val result = for
       state <- Reference.pure[IO, Int](0)
-      // parallel increments
-      rs <- oneTo100k.parTraverse(_ => incAndGet(state))
+      // concurrent increments
+      rs <- oneToN.parTraverse(_ => incAndGet(state))
     yield rs
 
-    // each number from 1 to 100000 should be in the result list
+    // all numbers from 1 to n should be in the result list
     result.map: increments =>
       val set = increments.toSet
-      assert(set.size == 100000 && oneTo100k.forall(i => set.contains(i)))
-  
+      assert(set.size == n && oneToN.forall(i => set.contains(i)))
+
+
+  test("signal is sent once"):
+
+      for
+        signal <- Signal[IO,Either[Unit,Unit]]
+        firstComplete <- signal.complete(Left(()))
+        secondComplete <- signal.complete(Right(()))
+        signalReceived <- signal.await
+      yield assert(firstComplete && !secondComplete && signalReceived == Left(()))
+
 end Test
 
