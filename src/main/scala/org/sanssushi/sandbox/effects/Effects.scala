@@ -68,6 +68,8 @@ trait Signal[F[_], S]:
   def await: F[S]
 
 object Signal:
+  
+  def unit[F[_] : Async]: F[Signal[F, Unit]] = Signal[F, Unit]
 
   /** Factory method.
    *

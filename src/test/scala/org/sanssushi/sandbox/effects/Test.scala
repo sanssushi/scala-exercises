@@ -4,6 +4,8 @@ import cats.effect.IO
 import cats.effect.testing.minitest.IOTestSuite
 import cats.syntax.parallel.*
 
+import F.util.*
+
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object Test extends IOTestSuite:
@@ -15,26 +17,28 @@ object Test extends IOTestSuite:
     val n = 100000
     val oneToN = (1 to n).toList
 
-    val result = for
+    for
       state <- Reference.pure[IO, Int](0)
-      // concurrent increments
-      rs <- oneToN.parTraverse(_ => incAndGet(state))
-    yield rs
-
-    // all numbers from 1 to n should be in the result list
-    result.map: increments =>
-      val set = increments.toSet
-      assert(set.size == n && oneToN.forall(i => set.contains(i)))
-
+      incrementResults <- oneToN.parTraverse(_ => incAndGet(state)) // concurrent increments
+    yield
+      val set = incrementResults.toSet
+      assert(oneToN.forall(i => set.contains(i)))
 
   test("signal is sent once"):
+    for
+      signal <- Signal[IO,Either[Unit,Unit]]
+      firstComplete <- signal.complete(Left(()))
+      secondComplete <- signal.complete(Right(()))
+      signalReceived <- signal.await
+    yield assert(firstComplete && !secondComplete && signalReceived == Left(()))
 
-      for
-        signal <- Signal[IO,Either[Unit,Unit]]
-        firstComplete <- signal.complete(Left(()))
-        secondComplete <- signal.complete(Right(()))
-        signalReceived <- signal.await
-      yield assert(firstComplete && !secondComplete && signalReceived == Left(()))
+  test("resource is released"):
+    for
+      released <- Signal.unit[IO]
+      resource = Resource[IO, Unit](F.unit)(_ => released.complete(()).unit)
+      _ <- resource.use(_ => F.error("boom!")).recover(_ => ())
+      _ <- released.await
+    yield assert(true)
 
 end Test
 
