@@ -27,12 +27,12 @@ As demonstration of the usefulness and relative simplicity of effect composition
 you find an implementation of [Semaphore](https://en.wikipedia.org/wiki/Semaphore_(programming))
 composed of simpler effects in `Effects.scala`.  The equivalent cats-effect version
 of simple effects written there are referenced in the scaladoc, if available.
+Some common effects and utils are put into object `F`.
+A demo use case (controlled concurrent file access) can be found in `Main`.
 
 The use of a generic effect type `F[_]` allows to focus
 on the abstract structure and remove the specifics of concrete effect types as much as possible.
 (And as a side effect the code will run on different effect systems.)
 
-The effect composition is shown in `Effects.scala`. Some common effects and utils are put into object `F`.
-A demo use case (controlled concurrent file access) can be found in `Main`.
 
 

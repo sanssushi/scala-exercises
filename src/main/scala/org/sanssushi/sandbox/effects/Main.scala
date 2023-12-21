@@ -69,7 +69,7 @@ object Main extends IOApp.Simple:
       // control file lifecycle via Resource
       Resource(File.open(path))(_.close >> F.pure("file closed.").log.unit).use: file =>
         // create a semaphore
-        Semaphore(numberOfPermits, _defaultTimeout = timeout)(F.pure(file)).flatMap: semaphore =>
+        Semaphore(numberOfPermits, timeout)(F.pure(file)).flatMap: semaphore =>
           // create some tasks using default timeout
           (1 to numberOfTasks).toList.parTraverse: id =>
             val permits = id

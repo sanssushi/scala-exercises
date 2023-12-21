@@ -9,8 +9,6 @@ lazy val root = project
 
     scalaVersion := scala3Version,
 
-    fork := true,
-
     scalacOptions := Seq(
       "-feature",
       "-deprecation",
@@ -18,6 +16,8 @@ lazy val root = project
       "-language:strictEquality",
       "-source:future",
       "-unchecked"),
+
+    testFrameworks += new TestFramework("minitest.runner.Framework"),
 
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % "3.5.2",
