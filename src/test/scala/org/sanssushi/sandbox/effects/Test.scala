@@ -11,7 +11,7 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 object Test extends IOTestSuite:
   override val timeout: FiniteDuration = 10.seconds
 
-  test("increments are atomic"):
+  test("reference: increments are atomic"):
 
     def incAndGet(ref: Reference[IO, Int]): IO[Int] = ref.updateAndGet(x => x + 1)
     val n = 100000
@@ -24,7 +24,7 @@ object Test extends IOTestSuite:
       val set = incrementResults.toSet
       assert(oneToN.forall(i => set.contains(i)))
 
-  test("signal is sent once"):
+  test("signal: is sent once"):
     for
       signal <- Signal[IO,Either[Unit,Unit]]
       firstComplete <- signal.complete(Left(()))
@@ -32,13 +32,30 @@ object Test extends IOTestSuite:
       signalReceived <- signal.await
     yield assert(firstComplete && !secondComplete && signalReceived == Left(()))
 
-  test("resource is released"):
+  test("resource: is released on error"):
     for
-      released <- Signal.unit[IO]
-      resource = Resource[IO, Unit](F.unit)(_ => released.complete(()).unit)
+      release <- Signal.unit[IO]
+      resource = Resource[IO, Unit](F.unit)(_ => release.complete(()).unit)
       _ <- resource.use(_ => F.error("boom!")).recover(_ => ())
-      _ <- released.await
+      _ <- release.await
     yield assert(true)
+
+  test("semaphore: lock is exclusive"):
+
+    object x:
+      var value: Int = 0
+      def unsafeIncrement(): Unit =
+        value += 1
+
+    val n = 100000
+    val oneToN = (1 to n).toList
+
+    for
+      mutex <- Semaphore.apply[IO, Unit](100, 10.seconds)(F.unit)
+      _ <- oneToN.parTraverse: _ => // parallel unsafe increments...
+        mutex.lock: _ => // ...coordinated by lock
+          F.delay[IO, Unit](x.unsafeIncrement())
+    yield assert(x.value == n)
 
 end Test
 
