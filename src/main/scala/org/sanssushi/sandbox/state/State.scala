@@ -1,11 +1,15 @@
 package org.sanssushi.sandbox.state
 
-type State[S,+A] = S => (S, A)
-type Transitions[-I,S,+A] = I => State[S,A]
+import org.sanssushi.sandbox.util.Type
+import scala.annotation.targetName
+import scala.compiletime.summonInline
+
+opaque type State[S, +A] = S => (S, A)
+opaque type Transitions[-I, S, +A] = I => State[S, A]
 
 object State:
 
-  import Transitions.traverse
+  import Transitions.*
 
   extension[S,A](state: State[S,A])
 
@@ -17,14 +21,9 @@ object State:
       val (s1, a1) = state(s)
       f(a1)(s1)
 
-    infix def followedBy[B](that: State[S, B]): State[S, B] =
+    @targetName("followedBy")
+    def >>[B](that: State[S, B]): State[S, B] =
       state.flatMap(_ => that)
-
-    infix def after[B](that: State[S, B]): State[S, A] =
-      that followedBy state
-
-    def combine[B](that: State[S, B]): State[S, (A, B)] =
-      state.flatMap(a => that.map(b => (a,b)))
 
     def unfold(s: S): LazyList[A] =
       val (nextS, a) = state(s)
@@ -35,14 +34,40 @@ object State:
 
   end extension
 
+  def apply[S, A](f: S => (S, A)): State[S, A] = f
+
   def unit[S, A](a: A): State[S, A] = s => (s, a)
   def get[S]: State[S, S] = s => (s, s)
   def set[S](s: S): State[S, Unit] = _ => (s, ())
   def modify[S](f: S => S): State[S, Unit] = s => (f(s), ())
   def inspect[S,A](f: S => A): State[S,A] = s => (s, f(s))
 
-  def sequence[S,A](states: Seq[State[S, A]]): State[S, Seq[A]] =
-    identity[State[S,A]].traverse(states)
+  def run[S, A]: Seq[State[S, A]] => S => LazyList[A] =
+    identity[State[S, A]].process
+
+  def sequence[S,A]: Seq[State[S, A]] => State[S, Seq[A]] =
+    identity[State[S,A]].traverse
+
+  /** Extract common S for state tuple. */
+  type CommonS[T <: Tuple] = T match
+    case State[s, ?] *: tl =>
+      Tuple.Filter[T, [X] =>> Type.Match[X, State[s, Any]]] match
+        case T => s
+
+  /** Derive type (A1, A2, ..., AN) for state tuple. */
+  type CombinedA[T <: Tuple] = Tuple.Map[T, [X] =>>
+    X match
+      case State[?, a] => a]
+
+  extension [T <: NonEmptyTuple](t: T)
+    /** combine (State[S, A1], State[S, A1], ..., State[S, AN]) to
+     * State[S, (A1, A2, ..., AN)] */
+    def combined[S >: CommonS[T] <: CommonS[T], A >: CombinedA[T] <: CombinedA[T]](using ev: Type.IsTupleOf[State[S, Any]][T]): State[S, A] =
+      // cast to and from Seq to reuse State.sequence (with proper type checks in place)
+      State.sequence(t.toList.asInstanceOf[Seq[State[S, Any]]])
+        .map(Array[Any])
+        .map(Tuple.fromArray)
+        .map(_.asInstanceOf[A])
 
 end State
 
@@ -50,13 +75,15 @@ object Transitions:
 
   import State.*
 
+  def apply[I, S, A](f: I => State[S, A]): Transitions[I, S, A] = f
+  
   extension [I, S, A](transitions: Transitions[I, S, A])
 
-    def process: (S, Seq[I]) => LazyList[A] =
-      case (_, Nil) => LazyList.empty
-      case (s, i :: is) =>
-        val (sNext, a) = transitions(i)(s)
-        a #:: process(sNext, is)
+    def process: Seq[I] => S => LazyList[A] =
+      case Nil => _ => LazyList.empty
+      case hd :: tl => s =>
+        val (sNext, a) = transitions(hd)(s)
+        a #:: process(tl)(sNext)
 
     def traverse(input: Seq[I]): State[S, Seq[A]] =
       val start: State[S, List[A]] = unit(Nil)
