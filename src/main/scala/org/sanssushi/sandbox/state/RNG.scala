@@ -2,8 +2,6 @@ package org.sanssushi.sandbox.state
 
 import org.sanssushi.sandbox.state.RNG.{Random, SEED}
 import org.sanssushi.sandbox.state.State.*
-import org.sanssushi.sandbox.util.Type
-import org.sanssushi.sandbox.util.Type.IsTupleOf
 
 import scala.annotation.targetName
 
@@ -57,10 +55,6 @@ object Dice:
     def roll(seed: SEED): LazyList[DiceRoll] =
       dice.unfold(seed)
   
-  extension [T <: Tuple : Type.IsTupleOf[DiceRoll]](dice: Random[T])
-    def roll(seed: SEED): LazyList[T] =
-      dice.unfold(seed)
-
   object DND:
 
     lazy val d4: Random[DiceRoll] = Dice(4)
@@ -76,7 +70,7 @@ object Dice:
     @targetName("percentileDice")
     lazy val `d%`: Random[DiceRoll] = d10.map(_ * 10)
 
-    lazy val `2d6`: Random[(DiceRoll, DiceRoll)] = (d6, d6).combined
+    lazy val `2d6`: Random[(DiceRoll, DiceRoll)] = combine(d6, d6)
 
   end DND
 

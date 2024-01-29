@@ -1,8 +1,6 @@
 package org.sanssushi.sandbox.state
 
-import org.sanssushi.sandbox.util.Type
 import scala.annotation.targetName
-import scala.compiletime.summonInline
 
 opaque type State[S, +A] = S => (S, A)
 opaque type Transitions[-I, S, +A] = I => State[S, A]
@@ -48,26 +46,24 @@ object State:
   def sequence[S,A]: Seq[State[S, A]] => State[S, Seq[A]] =
     identity[State[S,A]].traverse
 
-  /** Extract common S for state tuple. */
-  type CommonS[T <: Tuple] = T match
-    case State[s, ?] *: tl =>
-      Tuple.Filter[T, [X] =>> Type.Match[X, State[s, Any]]] match
-        case T => s
+  /** Type class for combining state tuples.
+   *  @see [[State.combine]] */
+  opaque type Combine[S, T <: Tuple, O <: Tuple] = T => State[S,O]
 
-  /** Derive type (A1, A2, ..., AN) for state tuple. */
-  type CombinedA[T <: Tuple] = Tuple.Map[T, [X] =>>
-    X match
-      case State[?, a] => a]
+  // TC instances
+  given combineEmpty[S]: Combine[S, EmptyTuple, EmptyTuple] = _ => State.unit(EmptyTuple)
+  given combineNonEmpty[S, HO, TL <: Tuple, TO <: Tuple](using combine: Combine[S, TL, TO]): Combine[S, State[S, HO] *: TL, HO *: TO] =
+    (t: State[S, HO] *: TL) =>
+      for
+        ho <- t.head
+        to <- combine(t.tail)
+      yield ho *: to
 
-  extension [T <: NonEmptyTuple](t: T)
-    /** combine (State[S, A1], State[S, A1], ..., State[S, AN]) to
-     * State[S, (A1, A2, ..., AN)] */
-    def combined[S >: CommonS[T] <: CommonS[T], A >: CombinedA[T] <: CombinedA[T]](using ev: Type.IsTupleOf[State[S, Any]][T]): State[S, A] =
-      // cast to and from Seq to reuse State.sequence (with proper type checks in place)
-      State.sequence(t.toList.asInstanceOf[Seq[State[S, Any]]])
-        .map(Array[Any])
-        .map(Tuple.fromArray)
-        .map(_.asInstanceOf[A])
+  /** Combine a tuple of states with a common <code>S</code>:
+   * <code>(State[S, A1], State[S, A2], ..., State[S, AN])</code> will be transformed to <code>State[S, (A1, A2, ..., AN)]</code> */
+  def combine[S, HO, TL <: Tuple, TO <: Tuple](t: State[S, HO] *: TL)
+                                              (using combine: Combine[S, State[S, HO] *: TL, HO *: TO]): State[S, HO *: TO] =
+    combine(t)
 
 end State
 
