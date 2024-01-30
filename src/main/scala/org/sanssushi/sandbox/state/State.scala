@@ -46,24 +46,32 @@ object State:
   def sequence[S,A]: Seq[State[S, A]] => State[S, Seq[A]] =
     identity[State[S,A]].traverse
 
-  /** Type class for combining state tuples.
-   *  @see [[State.combine]] */
-  opaque type Combine[S, T <: Tuple, O <: Tuple] = T => State[S,O]
+  /** TC for combining state tuples.
+   * @see [[State.combine]] */
+  opaque type Combiner[S, T <: Tuple, O <: Tuple] = T => State[S,O]
 
   // TC instances
-  given combineEmpty[S]: Combine[S, EmptyTuple, EmptyTuple] = _ => State.unit(EmptyTuple)
-  given combineNonEmpty[S, HO, TL <: Tuple, TO <: Tuple](using combine: Combine[S, TL, TO]): Combine[S, State[S, HO] *: TL, HO *: TO] =
-    (t: State[S, HO] *: TL) =>
-      for
-        ho <- t.head
-        to <- combine(t.tail)
-      yield ho *: to
 
-  /** Combine a tuple of states with a common <code>S</code>:
-   * <code>(State[S, A1], State[S, A2], ..., State[S, AN])</code> will be transformed to <code>State[S, (A1, A2, ..., AN)]</code> */
-  def combine[S, HO, TL <: Tuple, TO <: Tuple](t: State[S, HO] *: TL)
-                                              (using combine: Combine[S, State[S, HO] *: TL, HO *: TO]): State[S, HO *: TO] =
-    combine(t)
+  // base case: combine an empty tuple
+  given combineEmpty[S]: Combiner[S, EmptyTuple, EmptyTuple] = _ => State.unit(EmptyTuple)
+
+  // general case: combine a non empty tuple that starts with a State[S, HO]
+  given combineNonEmpty[S, HO, TL <: Tuple, TO <: Tuple]
+  (using c: Combiner[S, TL, TO]): Combiner[S, State[S, HO] *: TL, HO *: TO] = t =>
+    for
+      ho <- t.head
+      to <- c(t.tail)
+    yield ho *: to
+
+  // fallback: create a custom compile error
+  inline given typeError[S, T <: Tuple, O <: Tuple]: Combiner[S, T, O] =
+    compiletime.error(
+      "Tuple does not conform to (State[S, A1], State[S, A2], ..., State[S, AN]) or\n" +
+      "the combined type State[S, (A1, A2, ..., AN)] does match the expected result type.")
+
+  /** Combine a state tuple. Transforms
+   * <code>(State[S, A1], State[S, A2], ..., State[S, AN])</code> to <code>State[S, (A1, A2, ..., AN)]</code> */
+  def combine[S, T <: Tuple, O <: Tuple](t: T)(using c: Combiner[S, T, O]): State[S, O] = c(t)
 
 end State
 
