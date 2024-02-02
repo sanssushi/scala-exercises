@@ -34,4 +34,15 @@ A demo use case (controlled concurrent file access) can be found in `Main`. Some
 test cases are covered in `Test`.
 
 
-
+```mermaid
+stateDiagram-v2
+    [*] --> AwaitingSelection
+    AwaitingSelection --> AwaitingPayment: Selection
+    AwaitingPayment --> AwaitingPayment: Payment (not enough)
+    AwaitingPayment --> PreparingCoffee: Payment (enough)
+    AwaitingPayment --> AwaitingSelection: Cancel (no payment)
+    AwaitingPayment --> Cancelled: Cancel (with payment)
+    Cancelled --> AwaitingSelection: TakeBackPayment
+    PreparingCoffee --> CoffeeIsReady: CoffeeCompleted
+    CoffeeIsReady --> AwaitingSelection: TakeCoffeeAndChange
+```
