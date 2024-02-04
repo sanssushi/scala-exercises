@@ -3,8 +3,6 @@ package org.sanssushi.sandbox.state
 import org.sanssushi.sandbox.state.RNG.{Random, SEED}
 import org.sanssushi.sandbox.state.State.*
 
-import scala.annotation.targetName
-
 object RNG:
 
   type SEED = Long
@@ -55,24 +53,21 @@ object Dice:
     def roll(seed: SEED): LazyList[DiceRoll] =
       dice.unfold(seed)
   
-  object DND:
+  object DNDDiceSet:
 
-    lazy val d4: Random[DiceRoll] = Dice(4)
-    lazy val d6: Random[DiceRoll] = Dice(6)
-    lazy val d8: Random[DiceRoll] = Dice(8)
-    lazy val d12: Random[DiceRoll] = Dice(12)
-    lazy val d20: Random[DiceRoll] = Dice(20)
+    val d4: Random[DiceRoll] = Dice(4)
+    val d6: Random[DiceRoll] = Dice(6)
+    val d8: Random[DiceRoll] = Dice(8)
+    // facets 0 to 9
+    val d10: Random[DiceRoll] = Dice(10).map(_ - 1)
+    val d12: Random[DiceRoll] = Dice(12)
+    val d20: Random[DiceRoll] = Dice(20)
+    // facets 00, 10, 20, ..., 90
+    val `d%`: Random[DiceRoll] = d10.map(_ * 10)
+    val d100: Random[(DiceRoll, DiceRoll)] = combine(`d%`, d10)
+    val `2d6`: Random[(DiceRoll, DiceRoll)] = combine(d6, d6)
 
-    /** facets 0 to 9 */
-    lazy val d10: Random[DiceRoll] = Dice(10).map(_ - 1)
-
-    /** facets 0, 10, 20, ..., 90 */
-    @targetName("percentileDice")
-    lazy val `d%`: Random[DiceRoll] = d10.map(_ * 10)
-
-    lazy val `2d6`: Random[(DiceRoll, DiceRoll)] = combine(d6, d6)
-
-  end DND
+  end DNDDiceSet
 
 end Dice
 
