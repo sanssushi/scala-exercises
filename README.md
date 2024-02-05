@@ -16,7 +16,8 @@ computation to complete, and so on and so forth.
 effect types allow us to compose complex effects from simpler ones in a pure functional way,
 just like we can compose complex pure functions from simpler ones.**
 
-At the very core of any effect system (e.g. monix, cats-effect or zio) there's a higher kinded type like `IO[_]`
+At the very core of any effect system (e.g. monix, cats-effect or zio) there's a higher kinded type like `IO[_]` that 
+allows to
 - to wrap and defer the execution of an effectful computation: `unit` 
 - to modify the result of the computation with a pure function: `map`
 - to compose effectful computations to more complex ones: `flatMap`
@@ -38,7 +39,8 @@ object IO:
 ```
 
 As a result, an instance of the effect type `IO[A]` can represent an HTTP request,
-accessing a locked resource, an asynchronous computation, a database transaction, you name it.
+accessing a locked resource, an asynchronous computation, a database transaction - you name it - which, again, can
+be composed to more complex effects via `flatMap`.
 
 Of course, the effect system that ultimately implements
 the effect type and runs the effect is much richer than this implementation. 
@@ -59,6 +61,40 @@ in [`org.sanssushi.sandbox.effects.Main`](src/main/scala/org/sanssushi/sandbox/e
 test cases are covered in [`org.sanssushi.sandbox.effects.Test`](src/test/scala/org/sanssushi/sandbox/effects/Test.scala).
 
 ## State
+
+In imperative languages mutable states are often used to construct the result of a computation step by step
+using statements that produce the intermediate results in one place.
+
+While an imperative style, like "first do this, then do that, and finally combine the intermediate results like this", 
+is very intuitive, the intermediate steps of a computation might be hard to comprehend and test. Fortunately we
+don't need statements – and not even states – for this programming style. Function composition is enough.
+
+```scala 3
+extension [T, U](f: T => U) def trace: T => (T, U) = t => (t, f(t))
+
+def doThis: A => B
+def doThat: B => C
+def combineResults: (B, C) => D
+
+def composition: A => D =
+  doThis andThen doThat.trace andThen combineResults.tupled
+```
+
+And for the composition of computations of the same kind, like `Future` or `IO`, there's of course Scala's
+for-comprehension, that makes use of `flatMap` and `map` behind the scenes:
+
+```scala 3
+def doThis: A => Future[B]
+def doThat: B => Future[C]
+def combineResults: (B, C) => D
+
+def composition: A => Future[D] = a =>
+  for
+    b <- doThis(a)
+    c <- doThat(b)
+  yield combineResults(b, c)
+```
+
 
 ```mermaid
 stateDiagram
