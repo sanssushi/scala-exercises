@@ -66,7 +66,8 @@ In imperative languages mutable states are often used to construct the result of
 using statements that produce the intermediate results in one place.
 
 While an imperative style, like "first do this, then do that, and finally combine the intermediate results like this", 
-is very intuitive, the intermediate steps of a computation might be hard to comprehend and test. Fortunately we
+is very intuitive, the use of statements and mutable state can make the intermediate steps 
+hard to understand and test. Fortunately we
 don't need statements – and not even states – for this programming style. Function composition is enough.
 
 ```scala 3
@@ -80,8 +81,8 @@ def composition: A => D =
   doThis andThen doThat.trace andThen combineResults.tupled
 ```
 
-And for the composition of computations of the same kind, like `Future` or `IO`, there's of course Scala's
-for-comprehension, that makes use of `flatMap` and `map` behind the scenes:
+For the composition of computations of the same kind, like `Future` or `IO`, there's of course Scala's
+for-comprehension which makes use of `flatMap` and `map` behind the scenes.
 
 ```scala 3
 def doThis: A => Future[B]
@@ -95,6 +96,71 @@ def composition: A => Future[D] = a =>
   yield combineResults(b, c)
 ```
 
+However, there are operations that require an internal state, for example operations 
+on a bank account: `deposit`, `withdraw` and `getBalance`. They need to know the current balance,
+may modify it and return a value that is derived from it. 
+
+Without mutable state and with pure functions only the state then needs to be an argument, too.
+
+```scala 3
+def lineOfCredit: Euro = Euro(3000, 0)
+
+def deposit(amount: Euro): Euro => (Euro, Unit) = balance => 
+  (balance + amount, ())
+
+def withdraw(euro: Int, cent: Int): Euro => (Euro, Option[Euro]) = balance =>
+  val amount = Euro(euro, cent)
+  if balance + lineOfCredit >= amount 
+  then (balance - amount, Some(amount)) else (balance, None)
+
+def getBalance: Euro => (Euro, String) = balance => 
+  (balance, balance.display)
+```
+
+We can identify a common function type here: `Euro => (Euro, A)` or in general `S => (S, A)`, a function that transforms
+the current state into the following state and produces a value of some type `A`. However, carrying over the state
+from operation to operation seems tedious. Ideally we want to be able to write code like this:
+
+```scala 3
+val initialBalance: Euro = Euro.zero
+val accountOperations: State[Euro, String] =
+  for
+    _ <- deposit(Euro(100, 0))
+    _ <- deposit(Euro(50, 0))
+    _ <- withdraw(20, 0)
+    _ <- deposit(Euro(30, 0))
+    _ <- withdraw(90, 0)
+    balance <- getBalance
+  yield balance
+    
+println("Latest balance: " + accountOperations.run(initialBalance))
+```
+
+In other words, we want to treat stateful operations as operations of a certain kind, just like we treat 
+async operations using `Future` or operations that may or may not return a value using `Option`. 
+
+Turns out we can. It's what the `State` monad is for. This is the core implementation
+that will make the previous code work:
+
+```scala 3
+type State[S, A] = S => (S, A)
+
+object State:
+  
+  def unit[S, A](a: A): State[S, A] = current => (current, a)
+    
+  extension [S,A] (f: State[S, A])
+    
+    def map[B](g: A => B): State[S, B] = current =>
+      val (next, a) = f(current)
+      (next, g(a))
+
+    def flatMap[B](g: A => State[S, B]): State[S, B] = current =>
+      val (next, a) = f(current)
+      g(a)(next)
+
+    def run: S => A = current => f(current)._2
+```
 
 ```mermaid
 stateDiagram
