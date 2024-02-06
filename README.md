@@ -71,7 +71,8 @@ hard to understand and test. Fortunately we
 don't need statements – and not even states – for this programming style. Function composition is enough.
 
 ```scala 3
-extension [T, U](f: T => U) def trace: T => (T, U) = t => (t, f(t))
+extension [T, U](f: T => U) 
+  def trace: T => (T, U) = t => (t, f(t))
 
 def doThis: A => B
 def doThat: B => C
@@ -137,30 +138,39 @@ println("Latest balance: " + accountOperations.run(initialBalance))
 ```
 
 In other words, we want to treat stateful operations as operations of a certain kind, just like we treat 
-async operations using `Future` or operations that may or may not return a value using `Option`. 
+async operations using `Future` or operations that may or may not return a value using `Option`.
 
-Turns out we can. It's what the `State` monad is for. This is the core implementation
-that will make the previous code work:
+Turns out we can make the above code work if we can
+- identify functions of the type `S => (S, A)` as stateful operations: `State[S, A]`
+- modify the output of a stateful operation: `map`
+- create a neutral state operation: `unit`
+- compose stateful operations by carrying along the state from one operation to another: `flatMap`
+- run the (composed) state operation(s) with an initial state: `run`
 
 ```scala 3
 type State[S, A] = S => (S, A)
 
-object State:
-  
-  def unit[S, A](a: A): State[S, A] = current => (current, a)
+def unit[S, A](a: A): State[S, A] = current => (current, a)
     
-  extension [S,A] (f: State[S, A])
+extension [S,A] (f: State[S, A])
     
-    def map[B](g: A => B): State[S, B] = current =>
-      val (next, a) = f(current)
-      (next, g(a))
+  def map[B](g: A => B): State[S, B] = current =>
+    val (next, a) = f(current)
+    (next, g(a))
 
-    def flatMap[B](g: A => State[S, B]): State[S, B] = current =>
-      val (next, a) = f(current)
-      g(a)(next)
+  def flatMap[B](g: A => State[S, B]): State[S, B] = current =>
+    val (next, a) = f(current)
+    g(a)(next)
 
-    def run: S => A = current => f(current)._2
+  def run: S => A = current => 
+    f(current) match
+      case (s, a) => a
 ```
+
+A more fleshed out version of the `State` monad can be found in [`org.sanssushi.sandbox.state.State`](src/main/scala/org/sanssushi/sandbox/state/State.scala),
+the currency type `Euro` can be found in [`org.sanssushi.sandbox.state.common.Euro`](src/main/scala/org/sanssushi/sandbox/state/common/Euro.scala).
+
+
 
 ```mermaid
 stateDiagram

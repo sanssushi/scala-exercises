@@ -3,12 +3,9 @@ package org.sanssushi.sandbox.state
 import org.sanssushi.sandbox.state.CoffeeMaker.Coffee.*
 import org.sanssushi.sandbox.state.CoffeeMaker.In.*
 import org.sanssushi.sandbox.state.CoffeeMaker.S.*
-import org.sanssushi.sandbox.state.State.*
-import org.sanssushi.sandbox.state.Transitions.*
-
 import org.sanssushi.sandbox.state.common.Euro
 
-import math.Ordered.orderingToOrdered
+import scala.math.Ordered.orderingToOrdered
 
 object CoffeeMaker:
   
@@ -37,18 +34,16 @@ object CoffeeMaker:
     case PreparingCoffee(coffee: Coffee, change: Euro = Euro.zero)
 
   /** Output type */
-  type Out = Output | Unchanged
+  type Out = Output | Unchanged.type
   case class Output(msg: String, coffee: Option[Coffee] = None, change: Option[Euro] = None)
-  type Unchanged = Unit
-
-  /** Neutral transition (for invalid inputs) */
-  val identity: S => In => (S, Out) = s => _ => (s, ())
+  object Unchanged
 
   /** Finite state machine of the coffee maker. */
-  val stateMachine: Transitions[In, S, Out] =
-    Transitions: event =>
-      State: s =>
-        outgoingTransitions(s).applyOrElse(event, identity(s))
+  val stateMachine: Transitions[In, S, Out] = i => s =>
+    outgoingTransitions(s).applyOrElse(i, identity(s))
+
+  /** Outgoing transition pointing back to the same state */
+  def identity(s: S): In => (S, Out) = _ => (s, Unchanged)
 
   /** Outgoing transitions grouped by state S */
   def outgoingTransitions: S => PartialFunction[In, (S, Out)] =

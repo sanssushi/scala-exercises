@@ -2,8 +2,8 @@ package org.sanssushi.sandbox.state
 
 import scala.annotation.targetName
 
-opaque type State[S, +A] = S => (S, A)
-opaque type Transitions[-I, S, +A] = I => State[S, A]
+type State[S, +A] = S => (S, A)
+type Transitions[-I, S, +A] = I => State[S, A]
 
 object State:
 
@@ -31,8 +31,6 @@ object State:
       state(s)._2
 
   end extension
-
-  def apply[S, A](f: S => (S, A)): State[S, A] = f
 
   def unit[S, A](a: A): State[S, A] = s => (s, a)
   def get[S]: State[S, S] = s => (s, s)
@@ -79,8 +77,6 @@ object Transitions:
 
   import State.*
 
-  def apply[I, S, A](f: I => State[S, A]): Transitions[I, S, A] = f
-  
   extension [I, S, A](transitions: Transitions[I, S, A])
 
     def process: Seq[I] => S => LazyList[A] =

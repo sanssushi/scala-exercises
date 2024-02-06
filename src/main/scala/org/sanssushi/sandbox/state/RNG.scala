@@ -3,6 +3,8 @@ package org.sanssushi.sandbox.state
 import org.sanssushi.sandbox.state.RNG.{Random, SEED}
 import org.sanssushi.sandbox.state.State.*
 
+import scala.annotation.targetName
+
 object RNG:
 
   type SEED = Long
@@ -10,7 +12,7 @@ object RNG:
 
   /** calculate next pseudo random number and seed based on current seed,
    * see https://en.wikipedia.org/wiki/Linear_congruential_generator */
-  val next: Random[Int] = State: seed1 =>
+  val next: Random[Int] = seed1 =>
     val seed2 = (seed1 * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL
     val i = (seed2 >>> 16).toInt
     (seed2, i)
@@ -63,6 +65,7 @@ object Dice:
     val d12: Random[DiceRoll] = Dice(12)
     val d20: Random[DiceRoll] = Dice(20)
     // facets 00, 10, 20, ..., 90
+    @targetName("percentileDice")
     val `d%`: Random[DiceRoll] = d10.map(_ * 10)
     val d100: Random[(DiceRoll, DiceRoll)] = combine(`d%`, d10)
     val `2d6`: Random[(DiceRoll, DiceRoll)] = combine(d6, d6)
