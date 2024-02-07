@@ -3,6 +3,7 @@ package org.sanssushi.sandbox.state
 import org.sanssushi.sandbox.state.CoffeeMaker.Coffee.*
 import org.sanssushi.sandbox.state.CoffeeMaker.In.*
 import org.sanssushi.sandbox.state.CoffeeMaker.S.*
+import org.sanssushi.sandbox.state.CoffeeMaker.Out.*
 import org.sanssushi.sandbox.state.common.Euro
 
 import scala.math.Ordered.orderingToOrdered
@@ -34,19 +35,18 @@ object CoffeeMaker:
     case PreparingCoffee(coffee: Coffee, change: Euro = Euro.zero)
 
   /** Output type */
-  type Out = Output | Unchanged.type
-  case class Output(msg: String, coffee: Option[Coffee] = None, change: Option[Euro] = None)
-  object Unchanged
+  enum Out:
+    case Output(msg: String, coffee: Option[Coffee] = None, change: Option[Euro] = None)
+    case Unchanged
 
   /** Finite state machine of the coffee maker. */
-  val stateMachine: Transitions[In, S, Out] = i => s =>
-    outgoingTransitions(s).applyOrElse(i, identity(s))
-
-  /** Outgoing transition pointing back to the same state */
-  def identity(s: S): In => (S, Out) = _ => (s, Unchanged)
+  lazy val fsm: Transitions[In, S, Out] = i => s =>
+    if outgoingTransitions(s).isDefinedAt(i)
+    then outgoingTransitions(s)(i)
+    else (s, Unchanged)
 
   /** Outgoing transitions grouped by state S */
-  def outgoingTransitions: S => PartialFunction[In, (S, Out)] =
+  lazy val outgoingTransitions: S => PartialFunction[In, (S, Out)] =
 
     case Ready =>
       // coffee selected

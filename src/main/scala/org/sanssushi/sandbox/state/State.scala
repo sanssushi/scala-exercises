@@ -2,33 +2,40 @@ package org.sanssushi.sandbox.state
 
 import scala.annotation.targetName
 
+/** A stateful operation */
 type State[S, +A] = S => (S, A)
+
+/** State transitions based on input events */
 type Transitions[-I, S, +A] = I => State[S, A]
 
 object State:
 
   import Transitions.*
 
-  extension[S,A](state: State[S,A])
+  extension[S,A](f: State[S,A])
 
-    def map[B](f: A => B): State[S, B] = s =>
-      val (s1, a1) = state(s)
-      (s1, f(a1))
+    def map[B](g: A => B): State[S, B] = s =>
+      val (s1, a1) = f(s)
+      (s1, g(a1))
 
-    def flatMap[B](f: A => State[S, B]): State[S, B] = s =>
-      val (s1, a1) = state(s)
-      f(a1)(s1)
+    def flatMap[B](g: A => State[S, B]): State[S, B] = s =>
+      val (s1, a1) = f(s)
+      g(a1)(s1)
 
+    /** Compose two stateful operations (ignoring output of the first operation) */
     @targetName("followedBy")
     def >>[B](that: State[S, B]): State[S, B] =
-      state.flatMap(_ => that)
+      f.flatMap(_ => that)
 
+    /** Repeat the same stateful operation indefinitely producing an infinite list of output values */
     def unfold(s: S): LazyList[A] =
-      val (nextS, a) = state(s)
+      val (nextS, a) = f(s)
       a #:: unfold(nextS)
 
+    /** Run the state operation on the initial state s */
     def run(s: S): A =
-      state(s)._2
+      f(s) match
+        case (_, a) => a
 
   end extension
 

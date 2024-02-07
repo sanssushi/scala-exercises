@@ -97,78 +97,77 @@ def composition: A => Future[D] = a =>
   yield combineResults(b, c)
 ```
 
-However, there are operations that require an internal state, for example operations 
-on a bank account: `deposit`, `withdraw` and `getBalance`. They need to know the current balance,
-may modify it and return a value that is derived from it. 
+However, there are operations that do require states. For example there are operations 
+on a bank account: `deposit`, `withdraw` and `getBalance` which need to know the current balance,
+may modify it and return values derived from it. 
 
-Without mutable state and with pure functions only the state then needs to be an argument, too.
+Without side effect, without a mutable state in the background, the state needs to be passed 
+to the operations as argument.
 
 ```scala 3
 def lineOfCredit: Euro = Euro(3000, 0)
+def initialBalance: Euro = Euro.zero
 
-def deposit(amount: Euro): Euro => (Euro, Unit) = balance => 
+def deposit(amount: Euro): Euro => (Euro, Unit) = balance =>
   (balance + amount, ())
 
-def withdraw(euro: Int, cent: Int): Euro => (Euro, Option[Euro]) = balance =>
-  val amount = Euro(euro, cent)
-  if balance + lineOfCredit >= amount 
+def withdraw(amount: Euro): Euro => (Euro, Option[Euro]) = balance =>
+  if balance + lineOfCredit >= amount
   then (balance - amount, Some(amount)) else (balance, None)
 
-def getBalance: Euro => (Euro, String) = balance => 
-  (balance, balance.display)
+def getBalance: Euro => (Euro, Euro) = balance =>
+  (balance, balance)
 ```
 
-We can identify a common function type here: `Euro => (Euro, A)` or in general `S => (S, A)`, a function that transforms
-the current state into the following state and produces a value of some type `A`. However, carrying over the state
-from operation to operation seems tedious. Ideally we want to be able to write code like this:
+We can identify a common type signature here: `Euro => (Euro, A)`, or in general `S => (S, A)`, a function that transforms
+the current state into the following state and produces a value of some type `A`. 
+
+Carrying over the state from operation to operation is tedious, though. 
+Ideally we want to be able to write code like this:
 
 ```scala 3
-val initialBalance: Euro = Euro.zero
 val accountOperations: State[Euro, String] =
   for
     _ <- deposit(Euro(100, 0))
+    _ <- deposit(Euro(200, 0))
+    _ <- withdraw(Euro(80, 0))
     _ <- deposit(Euro(50, 0))
-    _ <- withdraw(20, 0)
-    _ <- deposit(Euro(30, 0))
-    _ <- withdraw(90, 0)
+    _ <- unit(log("account operations completed."))
     balance <- getBalance
-  yield balance
-    
+  yield balance.display
+  
 println("Latest balance: " + accountOperations.run(initialBalance))
 ```
 
-In other words, we want to treat stateful operations as operations of a certain kind, just like we treat 
+In other words, we want to treat stateful operations as operations of a certain kind – just like 
 async operations using `Future` or operations that may or may not return a value using `Option`.
 
-Turns out we can make the above code work if we can
-- identify functions of the type `S => (S, A)` as stateful operations: `State[S, A]`
+Turns out we can make the above code work if we're able to
+- identify functions `S => (S, A)` as stateful operations: `State[S, A]`
+- wrap a pure value as state operation that leaves the state unchanged: `unit`
 - modify the output of a stateful operation: `map`
-- create a neutral state operation: `unit`
-- compose stateful operations by carrying along the state from one operation to another: `flatMap`
-- run the (composed) state operation(s) with an initial state: `run`
+- compose stateful operations by carrying along the state from one to another: `flatMap`
+- run the (composed) state operation(s) on an initial state: `run`
 
 ```scala 3
 type State[S, A] = S => (S, A)
 
 def unit[S, A](a: A): State[S, A] = current => (current, a)
-    
+
 extension [S,A] (f: State[S, A])
-    
   def map[B](g: A => B): State[S, B] = current =>
     val (next, a) = f(current)
     (next, g(a))
-
+    
   def flatMap[B](g: A => State[S, B]): State[S, B] = current =>
     val (next, a) = f(current)
     g(a)(next)
 
-  def run: S => A = current => 
-    f(current) match
-      case (s, a) => a
+  def run(s: S): A =
+    f(s) match
+      case (_, a) => a
 ```
 
-A more fleshed out version of the `State` monad can be found in [`org.sanssushi.sandbox.state.State`](src/main/scala/org/sanssushi/sandbox/state/State.scala),
-the currency type `Euro` can be found in [`org.sanssushi.sandbox.state.common.Euro`](src/main/scala/org/sanssushi/sandbox/state/common/Euro.scala).
 
 
 
@@ -181,3 +180,6 @@ stateDiagram
     CoffeeSelected --> Ready: Cancelled
     PreparingCoffee --> Ready: Completed
 ```
+
+A more fleshed out version of the `State` monad can be found in [`org.sanssushi.sandbox.state.State`](src/main/scala/org/sanssushi/sandbox/state/State.scala),
+the currency type `Euro` that is used in the bank account operations can be found in [`org.sanssushi.sandbox.state.common.Euro`](src/main/scala/org/sanssushi/sandbox/state/common/Euro.scala).
