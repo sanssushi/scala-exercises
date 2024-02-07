@@ -3,8 +3,8 @@ package org.sanssushi.sandbox.effects
 import cats.effect.IO
 import cats.effect.testing.minitest.IOTestSuite
 import cats.syntax.parallel.*
-
 import F.util.*
+import org.sanssushi.sandbox.effects.Effects.{Reference, Resource, Semaphore, Signal}
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 

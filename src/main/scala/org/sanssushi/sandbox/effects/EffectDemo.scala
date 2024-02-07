@@ -13,7 +13,7 @@ import org.sanssushi.sandbox.effects.F.util.*
 import scala.concurrent.duration.*
 import scala.util.Random
 
-object Main extends IOApp.Simple:
+object EffectDemo extends IOApp.Simple:
 
   // at the outermost boundary of the program we pinpoint F[_] to
   // cats.effect.IO (could as well be ZIO or Monix Task)
@@ -83,4 +83,4 @@ object Main extends IOApp.Simple:
 
   end semaphoreDemo
 
-end Main
+end EffectDemo

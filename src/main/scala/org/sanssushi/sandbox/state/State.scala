@@ -6,11 +6,11 @@ import scala.annotation.targetName
 type State[S, +A] = S => (S, A)
 
 /** State transitions based on input events */
-type Transitions[-I, S, +A] = I => State[S, A]
+type Transition[-I, S, +A] = I => State[S, A]
 
 object State:
 
-  import Transitions.*
+  import Transition.*
 
   extension[S,A](f: State[S,A])
 
@@ -36,8 +36,6 @@ object State:
     def run(s: S): A =
       f(s) match
         case (_, a) => a
-
-  end extension
 
   def unit[S, A](a: A): State[S, A] = s => (s, a)
   def get[S]: State[S, S] = s => (s, s)
@@ -78,31 +76,24 @@ object State:
    * <code>(State[S, A1], State[S, A2], ..., State[S, AN])</code> to <code>State[S, (A1, A2, ..., AN)]</code> */
   def combine[S, T <: Tuple, O <: Tuple](t: T)(using c: Combiner[S, T, O]): State[S, O] = c(t)
 
-end State
 
-object Transitions:
+object Transition:
 
   import State.*
 
-  extension [I, S, A](transitions: Transitions[I, S, A])
+  extension [I, S, O](transition: Transition[I, S, O])
 
-    def process: Seq[I] => S => LazyList[A] =
+    def process: Seq[I] => S => LazyList[O] =
       case Nil => _ => LazyList.empty
       case hd :: tl => s =>
-        val (sNext, a) = transitions(hd)(s)
+        val (sNext, a) = transition(hd)(s)
         a #:: process(tl)(sNext)
 
-    def traverse(input: Seq[I]): State[S, Seq[A]] =
-      val start: State[S, List[A]] = unit(Nil)
-      val combined = input.map(transitions).foldLeft(start): (acc, state) =>
-          for
-            as <- acc
-            a <- state
-          yield a :: as
+    def traverse(input: Seq[I]): State[S, Seq[O]] =
+      val start: State[S, List[O]] = State.unit(Nil)
+      val combined = input.map(transition).foldLeft(start): (acc, state) =>
+        for
+          as <- acc
+          a <- state
+        yield a :: as
       combined.map(_.reverse)
-
-  end extension
-
-end Transitions
-
-

@@ -57,7 +57,7 @@ composed of simpler effects. The equivalent cats-effect version
 of the simple effects there are referenced in the scaladoc, if available.
 Some common effects and utils are put into [`org.sanssushi.sandbox.effects.F`](src/main/scala/org/sanssushi/sandbox/effects/F.scala).
 A demo use case (controlled concurrent file access) can be found
-in [`org.sanssushi.sandbox.effects.Main`](src/main/scala/org/sanssushi/sandbox/effects/Main.scala) and some
+in [`org.sanssushi.sandbox.effects.EffectDemo`](src/main/scala/org/sanssushi/sandbox/effects/EffectDemo.scala) and some
 test cases are covered in [`org.sanssushi.sandbox.effects.Test`](src/test/scala/org/sanssushi/sandbox/effects/Test.scala).
 
 ## State
@@ -139,7 +139,7 @@ val accountOperations: State[Euro, String] =
 println("Latest balance: " + accountOperations.run(initialBalance))
 ```
 
-In other words, we want to treat stateful operations as operations of a certain kind – just like 
+In other words, we simply want to treat stateful operations as composable operations of a certain kind – just like 
 async operations using `Future` or operations that may or may not return a value using `Option`.
 
 Turns out we can make the above code work if we're able to
@@ -168,8 +168,8 @@ extension [S,A] (f: State[S, A])
       case (_, a) => a
 ```
 
-
-
+A special kind of state operations are the transitions of a [Finite-state Machine](https://en.wikipedia.org/wiki/Finite-state_machine) (FSM).
+Take, for example, the state transitions of a coffee maker:
 
 ```mermaid
 stateDiagram
@@ -181,5 +181,21 @@ stateDiagram
     PreparingCoffee --> Ready: Completed
 ```
 
-A more fleshed out version of the `State` monad can be found in [`org.sanssushi.sandbox.state.State`](src/main/scala/org/sanssushi/sandbox/state/State.scala),
-the currency type `Euro` that is used in the bank account operations can be found in [`org.sanssushi.sandbox.state.common.Euro`](src/main/scala/org/sanssushi/sandbox/state/common/Euro.scala).
+As before, a state transition can be described as a state operation, a function `S => (S, A)` or `State[S, A]`, only
+that here the transitions are linked to events.
+We can describe this by expanding the state operation function to `I => S => (S, A)`, or
+
+```scala 3
+type Transition[-I, S, +A] = I => State[S, A]
+```
+
+Such function fully describes the transitions of an FSM. Note, in case an event isn't accepted for certain states,
+the transition produced by this function can always be `State.unit`, that is, the neutral (or identity) transition.
+
+With this function in place we can map a stream of events to state transitions and apply them
+successively starting from a dedicated initial state.
+
+For this and other examples of using the state monad take a look at [`org.sanssushi.sandbox.state.StateDemo`](org/sanssushi/sandbox/state/StateDemo.scala).
+The implementation of the coffee maker's transition function can be found in
+[`org.sanssushi.sandbox.state.CoffeeMaker`](src/main/scala/org/sanssushi/sandbox/state/CoffeeMaker.scala)
+For a more fleshed out version of the `State` monad see [`org.sanssushi.sandbox.state.State`](src/main/scala/org/sanssushi/sandbox/state/State.scala).
