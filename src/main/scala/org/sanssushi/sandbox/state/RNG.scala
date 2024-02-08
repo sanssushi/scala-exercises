@@ -2,9 +2,13 @@ package org.sanssushi.sandbox.state
 
 import org.sanssushi.sandbox.state.RNG.{Random, SEED}
 import org.sanssushi.sandbox.state.State.*
+import org.sanssushi.sandbox.state.common.Type.*
 
 import scala.annotation.targetName
 
+/** The Random Number Generator is a canonical example for stateful operations: a pseudo-random value is
+ * derived from an internal seed value. The seed changes consecutively with every random value generated, thus,
+ * becoming the seed for subsequent random values. */
 object RNG:
 
   type SEED = Long
@@ -25,6 +29,7 @@ object RNG:
 
 end RNG
 
+/** Coin flip derived from RNG */
 object Coin:
 
   enum CoinFlip:
@@ -40,6 +45,7 @@ object Coin:
 
 end Coin
 
+/** Dice roll derived from RNG */
 object Dice:
 
   val dice: Random[DiceRoll] = Dice(6)
@@ -54,9 +60,13 @@ object Dice:
   extension (dice: Random[DiceRoll])
     def roll(seed: SEED): LazyList[DiceRoll] =
       dice.unfold(seed)
-  
-  object DNDDiceSet:
 
+  extension [T <: Tuple : ForAll[Eq[DiceRoll]]](dice: Random[T])
+    def roll(seed: SEED): LazyList[T] =
+      dice.unfold(seed)
+  
+  /** Your favorite dice set */
+  object DND:
     val d4: Random[DiceRoll] = Dice(4)
     val d6: Random[DiceRoll] = Dice(6)
     val d8: Random[DiceRoll] = Dice(8)
@@ -68,9 +78,7 @@ object Dice:
     @targetName("percentileDice")
     val `d%`: Random[DiceRoll] = d10.map(_ * 10)
     val d100: Random[(DiceRoll, DiceRoll)] = combine(`d%`, d10)
-    val `2d6`: Random[(DiceRoll, DiceRoll)] = combine(d6, d6)
-
-  end DNDDiceSet
+  end DND
 
 end Dice
 

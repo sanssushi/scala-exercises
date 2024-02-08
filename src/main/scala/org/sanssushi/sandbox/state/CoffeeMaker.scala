@@ -9,6 +9,7 @@ import org.sanssushi.sandbox.state.common.Euro
 
 import scala.math.Ordered.orderingToOrdered
 
+/** The finite-state machine of a coffee maker implemented with the state monad. */
 object CoffeeMaker:
   
   /** Coffee products */
