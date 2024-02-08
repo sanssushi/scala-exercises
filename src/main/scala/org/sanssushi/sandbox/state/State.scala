@@ -43,7 +43,7 @@ object State:
   def modify[S](f: S => S): State[S, Unit] = s => (f(s), ())
   def inspect[S,A](f: S => A): State[S,A] = s => (s, f(s))
 
-  def run[S, A]: Seq[State[S, A]] => S => LazyList[A] =
+  def run[S, A]: LazyList[State[S, A]] => S => LazyList[A] =
     identity[State[S, A]].process
 
   def sequence[S,A]: Seq[State[S, A]] => State[S, Seq[A]] =
@@ -83,9 +83,9 @@ object Transition:
 
   extension [I, S, O](transition: Transition[I, S, O])
 
-    def process: Seq[I] => S => LazyList[O] =
-      case Nil => _ => LazyList.empty
-      case hd :: tl => s =>
+    def process: LazyList[I] => S => LazyList[O] =
+      case LazyList() => _ => LazyList.empty
+      case hd #:: tl => s =>
         val (sNext, a) = transition(hd)(s)
         a #:: process(tl)(sNext)
 

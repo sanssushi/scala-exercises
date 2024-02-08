@@ -189,11 +189,11 @@ We can describe this by expanding the state operation function to `I => S => (S,
 type Transition[-I, S, +A] = I => State[S, A]
 ```
 
-Such function fully describes the transitions of an FSM. Note, in case an event isn't accepted for certain states,
-the transition produced by this function can always be `State.unit`, that is, the neutral (or identity) transition.
-
-With this function in place we can map a stream of events to state transitions and apply them
-successively starting from a dedicated initial state.
+Such function fully describes the transitions of an FSM. Note, in case an event isn't accepted in a certain state,
+the transition produced by this function can always be `State.unit`, that is, the neutral (or identity) transition
+that's pointing back to the current state or, alternatively, a transition that points towards a dedicated error state.
+With this function in place, we can map a stream of events to state transitions and run through them
+successively beginning from the start state. 
 
 For this and other examples of using the state monad take a look at [`org.sanssushi.sandbox.state.StateDemo`](org/sanssushi/sandbox/state/StateDemo.scala).
 The implementation of the coffee maker's transition function can be found in
