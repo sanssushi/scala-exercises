@@ -5,7 +5,7 @@ import scala.annotation.targetName
 /** A stateful operation */
 type State[S, +A] = S => (S, A)
 
-/** State transitions based on input events */
+/** Stateful operations based on input events (e.g. the transitions of a finite-state machine) */
 type Transition[-I, S, +A] = I => State[S, A]
 
 object State:
@@ -14,10 +14,12 @@ object State:
 
   extension[S,A](f: State[S,A])
 
+    /** Modify the output of the stateful operation f. */
     def map[B](g: A => B): State[S, B] = s =>
       val (s1, a1) = f(s)
       (s1, g(a1))
 
+    /** Compose two stateful operations f and g. */
     def flatMap[B](g: A => State[S, B]): State[S, B] = s =>
       val (s1, a1) = f(s)
       g(a1)(s1)
@@ -37,15 +39,23 @@ object State:
       f(s) match
         case (_, a) => a
 
+  /** A neutral state operation with a pure value as output. */
   def unit[S, A](a: A): State[S, A] = s => (s, a)
+  /** A neutral state operation with the current state as output. */
   def get[S]: State[S, S] = s => (s, s)
+  /** The state operation that sets the next state regardless of the current state (no output). */
   def set[S](s: S): State[S, Unit] = _ => (s, ())
+  /** The state operation that updates the state based on the current state (no output). */
   def modify[S](f: S => S): State[S, Unit] = s => (f(s), ())
+  /** A neutral state operation that maps the current state to some output. */
   def inspect[S,A](f: S => A): State[S,A] = s => (s, f(s))
 
+  /** Turn a stream of state operation into a stream of output values. */
   def run[S, A]: LazyList[State[S, A]] => S => LazyList[A] =
     identity[State[S, A]].process
 
+  /** Compose a sequence of state operations into a single state operation with the sequence of outputs
+   * as output type. */
   def sequence[S,A]: Seq[State[S, A]] => State[S, Seq[A]] =
     identity[State[S,A]].traverse
 
@@ -55,7 +65,7 @@ object State:
 
   // TC instances
 
-  // base case: combine an empty tuple
+  // base case: empty tuple
   given combineEmpty[S]: Combiner[S, EmptyTuple, EmptyTuple] = _ => State.unit(EmptyTuple)
 
   // general case: combine a non empty tuple that starts with a State[S, HO]
@@ -66,13 +76,13 @@ object State:
       to <- c(t.tail)
     yield ho *: to
 
-  // fallback: create a custom compile error
+  // fallback: custom compile error
   inline given typeError[S, T <: Tuple, O <: Tuple]: Combiner[S, T, O] =
     compiletime.error(
       "Tuple does not conform to (State[S, A1], State[S, A2], ..., State[S, AN]) or\n" +
       "the combined type State[S, (A1, A2, ..., AN)] does match the expected result type.")
 
-  /** Combine a state tuple. Transforms
+  /** Combine a tuple of state operations. Transforms
    * <code>(State[S, A1], State[S, A2], ..., State[S, AN])</code> to <code>State[S, (A1, A2, ..., AN)]</code> */
   def combine[S, T <: Tuple, O <: Tuple](t: T)(using c: Combiner[S, T, O]): State[S, O] = c(t)
 
@@ -81,17 +91,20 @@ object Transition:
 
   import State.*
 
-  extension [I, S, O](transition: Transition[I, S, O])
+  extension [I, S, O](f: Transition[I, S, O])
 
+    /** Run through state transitions as defined by the input event stream and the transition function f. */
     def process: LazyList[I] => S => LazyList[O] =
       case LazyList() => _ => LazyList.empty
       case hd #:: tl => s =>
-        val (sNext, a) = transition(hd)(s)
+        val (sNext, a) = f(hd)(s)
         a #:: process(tl)(sNext)
 
+    /** Traverse a sequence of events and return the composition of corresponding state transitions as
+     * defined by the transition function f. */
     def traverse(input: Seq[I]): State[S, Seq[O]] =
       val start: State[S, List[O]] = State.unit(Nil)
-      val combined = input.map(transition).foldLeft(start): (acc, state) =>
+      val combined = input.map(f).foldLeft(start): (acc, state) =>
         for
           as <- acc
           a <- state

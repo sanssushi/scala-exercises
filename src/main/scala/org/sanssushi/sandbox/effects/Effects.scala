@@ -127,9 +127,6 @@ object Effects:
     def defaultTimeout: Duration
 
     /** Acquire n permits and gain privileged access to a limited resource of type R.
-     * Timeout for accessing resource.*/
-
-    /** Acquire permits to use resource
      * @param n the number of permits to acquire
      * @param timeout timeout for acquiring permits and using resource
      * @param f use resource
@@ -212,8 +209,8 @@ object Effects:
             state.grantPermitsMaybe.map:
               case (nextState, currentRequest) =>
                 (nextState, currentRequest.grantPermits
-                  // if grant fails the request has been "granted" by a racing cancellation / timeout before
-                  // and the associated permits are immediately released
+                  // if grant fails the request has been "granted" by a racing cancellation / timeout before:
+                  // the associated permits are released immediately
                   .ifM(run(grantPermitRequestsMaybe), releasePermitsOrCancelRequest(currentRequest)))
             ).unlift // create partial function
 
@@ -231,7 +228,7 @@ object Effects:
               _ <- run(update(state => state.enqueue(permits)))
             yield permits
 
-          override def permits[A](n: Int, timeout: Duration = defaultTimeout)(f: R => F[A]): F[A] =
+          override def permits[A](n: Int, timeout: Duration)(f: R => F[A]): F[A] =
             // uses Resource to manage permit lifecycle:
             // create permit request - acquire permits and set timeout - release permits / cancel request)
             Resource(enqueuePermitRequest(n))(releasePermitsOrCancelRequest)

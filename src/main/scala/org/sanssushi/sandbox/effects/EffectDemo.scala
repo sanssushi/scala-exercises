@@ -44,7 +44,7 @@ object EffectDemo extends IOApp.Simple:
     /** Read some characters from file. */
     def task(id: Int, fileAccess: (F[Char] => F[String]) => F[String]): F[String] =
       F.pure(s"[task $id] waiting for file access...").log *>
-        fileAccess(readChar => // blocks here until file access has been acquired
+        fileAccess(readChar => // semantic blocking until file access has been granted
           for
             _ <- F.pure(s"[task $id] access granted").log
             _ <- F.pure(s"[task $id] reading...").log
@@ -69,12 +69,13 @@ object EffectDemo extends IOApp.Simple:
 
       // control file lifecycle via Resource
       Resource(File.open(path))(_.close >> F.pure("file closed.").log.unit).use: file =>
-        // create a semaphore
+        // create a semaphore to coordinate file access
         Semaphore(numberOfPermits, timeout)(F.pure(file)).flatMap: semaphore =>
-          // create some tasks using default timeout
+          // create some parallel file operation tasks
           (1 to numberOfTasks).toList.parTraverse: id =>
+            // the number of acquired permits per task increases continuously
             val permits = id
-            // acquire permits for task
+            // run task (acquires file access through callback)
             task(id, callback => semaphore.permits(permits)(file => callback(file.readChar)))
               .map(c => (id, s"\"$c\""))
               .recover(t => (id, t.getMessage))

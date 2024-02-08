@@ -48,7 +48,7 @@ object StateDemo:
         balance <- getBalance
       yield balance.display
 
-    println("\nLet's run some operations on a bank account:\n")
+    println("\nLet's run some bank account operations:")
     val finalBalance = operations.run(Euro.zero)
     println(s"Latest balance: $finalBalance")
 
@@ -58,20 +58,25 @@ object StateDemo:
     import Transition.*
     import common.Euro
     import CoffeeMaker.Coffee.*
-    import CoffeeMaker.Event.*
+    import CoffeeMaker.CMEvent.*
 
-    val events =
-      Seq(Selection(DoubleEspresso), Payment(Euro(1, 0)), Payment(Euro(1, 0)), Payment(Euro(0, 50)), Completed)
+    val events = Seq(Selection(Espresso),
+      Cancel,
+      Selection(DoubleEspresso),
+      Payment(Euro(1, 0)),
+      Payment(Euro(1, 0)),
+      Payment(Euro(0, 50)),
+      PreparationComplete)
 
-    lazy val eventStream: LazyList[CoffeeMaker.Event] =
+    lazy val eventStream: LazyList[CoffeeMaker.CMEvent] =
       LazyList.from(events.iterator).map: event =>
         println(s"Event: $event")
         event
 
-    lazy val outputStream: LazyList[CoffeeMaker.Output] =
-      CoffeeMaker.fsm.process(eventStream)(CoffeeMaker.startState).map: output =>
+    lazy val outputStream: LazyList[CoffeeMaker.CMOut] =
+      CoffeeMaker.FSM.process(eventStream)(CoffeeMaker.Init).map: output =>
         println(s"Output: $output")
         output
 
-    println("\nLet's make some coffee:\n")
+    println("\nLet's make some coffee:")
     outputStream.toList // materialize stream

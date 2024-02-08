@@ -1,10 +1,9 @@
-# Scala 3 Bits and Pieces
+# `scala-exercises`
 
 ## Effects
 
-### In Essence, What are Effect Types like IO About?
-
-**But what is a side effect in computer programs in the first place?** Every computation that isn't a pure function call
+### In Essence, What are Effect Types like IO About? 
+***And what is a side effect in computer programs in the first place?*** Every computation that isn't a pure function call
 is effectful, that is, every function call that cannot be memoized or, in other words, whose result cannot
 be stored in favor of calling the function again, e.g. `readChar()`.
 
@@ -12,9 +11,11 @@ All real-world programs are full of effects: taking user input, writing stuff in
 the database, locking a shared resource, creating a timestamp, waiting for an asynchronous
 computation to complete, and so on and so forth.
 
-**By deferring the execution of an effectful computation,
+***By deferring the execution of an effectful computation,
 effect types allow us to compose complex effects from simpler ones in a pure functional way,
-just like we can compose complex pure functions from simpler ones.**
+just like we can compose complex pure functions from simpler ones.***
+
+### Core Implementation
 
 At the very core of any effect system (e.g. monix, cats-effect or zio) there's a higher kinded type like `IO[_]` that 
 allows to
@@ -62,6 +63,8 @@ test cases are covered in [`org.sanssushi.sandbox.effects.Test`](src/test/scala/
 
 ## State
 
+### Imperative Programming
+
 In imperative languages mutable states are often used to construct the result of a computation step by step
 using statements that produce the intermediate results in one place.
 
@@ -71,15 +74,15 @@ hard to understand and test. Fortunately we
 don't need statements – and not even states – for this programming style. Function composition is enough.
 
 ```scala 3
-extension [T, U](f: T => U) 
-  def trace: T => (T, U) = t => (t, f(t))
+def trace[T, U](f: T => U): T => (T, U) =
+  t => (t, f(t))
 
 def doThis: A => B
 def doThat: B => C
 def combineResults: (B, C) => D
 
 def composition: A => D =
-  doThis andThen doThat.trace andThen combineResults.tupled
+  doThis andThen trace(doThat) andThen combineResults.tupled
 ```
 
 For the composition of computations of the same kind, like `Future` or `IO`, there's of course Scala's
@@ -97,12 +100,12 @@ def composition: A => Future[D] = a =>
   yield combineResults(b, c)
 ```
 
-However, there are operations that do require states. For example there are operations 
-on a bank account: `deposit`, `withdraw` and `getBalance` which need to know the current balance,
-may modify it and return values derived from it. 
+### Stateful Operation
 
-Without side effect, without a mutable state in the background, the state needs to be passed 
-to the operations as argument.
+However, there are operations which require states. For example, operations 
+on a bank account like `deposit`, `withdraw` or `getBalance` need to know the current account balance to work.
+Without side effect, without a mutable state somewhere in the background, the state needs to be passed in
+to these operations as argument.
 
 ```scala 3
 def lineOfCredit: Euro = Euro(3000, 0)
@@ -119,11 +122,11 @@ def getBalance: Euro => (Euro, Euro) = balance =>
   (balance, balance)
 ```
 
-We can identify a common type signature here: `Euro => (Euro, A)`, or in general `S => (S, A)`, a function that transforms
-the current state into the following state and produces a value of some type `A`. 
+We can identify a common type signature `Euro => (Euro, A)`, or, in general, `S => (S, A)`: a function that transforms
+the current state into the following state and produces an output value of some type `A`. 
 
 Carrying over the state from operation to operation is tedious, though. 
-Ideally we want to be able to write code like this:
+Ideally we want to be able to write code like
 
 ```scala 3
 val accountOperations: State[Euro, String] =
@@ -139,14 +142,16 @@ val accountOperations: State[Euro, String] =
 println("Latest balance: " + accountOperations.run(initialBalance))
 ```
 
-In other words, we simply want to treat stateful operations as composable operations of a certain kind – just like 
-async operations using `Future` or operations that may or may not return a value using `Option`.
+In other words, we want to treat stateful operations as composable operations of a certain kind – just like 
+async operations with `Future` or operations that may or may not return a value with `Option`.
+
+### Core Implementation
 
 Turns out we can make the above code work if we're able to
 - identify functions `S => (S, A)` as stateful operations: `State[S, A]`
 - wrap a pure value as state operation that leaves the state unchanged: `unit`
 - modify the output of a stateful operation: `map`
-- compose stateful operations by carrying along the state from one to another: `flatMap`
+- compose stateful operations by carrying along the state from one operation to another: `flatMap`
 - run the (composed) state operation(s) on an initial state: `run`
 
 ```scala 3
@@ -168,7 +173,9 @@ extension [S,A] (f: State[S, A])
       case (_, a) => a
 ```
 
-A special kind of state operations are the transitions of a [Finite-state Machine](https://en.wikipedia.org/wiki/Finite-state_machine) (FSM).
+### FSM
+
+A special kind of state operation are the transitions of a [Finite-state Machine](https://en.wikipedia.org/wiki/Finite-state_machine) (FSM).
 Take, for example, the state transitions of a coffee maker:
 
 ```mermaid
@@ -177,25 +184,25 @@ stateDiagram
     Ready --> CoffeeSelected: Coffee Selection
     CoffeeSelected --> CoffeeSelected: Payment [not enough]
     CoffeeSelected --> PreparingCoffee: Payment [complete]
-    CoffeeSelected --> Ready: Cancelled
-    PreparingCoffee --> Ready: Completed
+    CoffeeSelected --> Ready: Cancel
+    PreparingCoffee --> Ready: Preparation Complete
 ```
 
-As before, a state transition can be described as a state operation, a function `S => (S, A)` or `State[S, A]`, only
-that here the transitions are linked to events.
-We can describe this by expanding the state operation function to `I => S => (S, A)`, or
+As before, a state transition can be described as a state operation, a function `S => (S, A)` (or `State[S, A]`), only
+that here the transitions are linked to input events.
+We can describe this by expanding the state operation function to `I => S => (S, A)` or by defining a type.
 
 ```scala 3
 type Transition[-I, S, +A] = I => State[S, A]
 ```
 
 Such function fully describes the transitions of an FSM. Note, in case an event isn't accepted in a certain state,
-the transition produced by this function can always be `State.unit`, that is, the neutral (or identity) transition
-that's pointing back to the current state or, alternatively, a transition that points towards a dedicated error state.
-With this function in place, we can map a stream of events to state transitions and run through them
-successively beginning from the start state. 
+the transition produced by this function can always point back to the current state with some
+warning as output perhaps, or, alternatively, point towards a dedicated error state.
 
-For this and other examples of using the state monad take a look at [`org.sanssushi.sandbox.state.StateDemo`](org/sanssushi/sandbox/state/StateDemo.scala).
-The implementation of the coffee maker's transition function can be found in
-[`org.sanssushi.sandbox.state.CoffeeMaker`](src/main/scala/org/sanssushi/sandbox/state/CoffeeMaker.scala)
-For a more fleshed out version of the `State` monad see [`org.sanssushi.sandbox.state.State`](src/main/scala/org/sanssushi/sandbox/state/State.scala).
+With such transition function in place, we can map a stream of input events to state transitions and run through them
+successively beginning from the initial `Ready` state. 
+This and other examples of the state monad can be found in [`org.sanssushi.sandbox.state.StateDemo`](src/main/scala/org/sanssushi/sandbox/state/StateDemo.scala).
+For the implementation of the transition function take a look at
+[`org.sanssushi.sandbox.state.CoffeeMaker`](src/main/scala/org/sanssushi/sandbox/state/CoffeeMaker.scala).
+For a more fleshed out version of the state monad see [`org.sanssushi.sandbox.state.State`](src/main/scala/org/sanssushi/sandbox/state/State.scala).

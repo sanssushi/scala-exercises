@@ -7,6 +7,8 @@ opaque type Euro = Long
 
 object Euro:
 
+  given CanEqual[Euro, Euro] = CanEqual.derived
+
   given Ordering[Euro] with
     def compare(x: Euro, y: Euro): Int = java.lang.Long.compare(x, y)
 
@@ -21,5 +23,7 @@ object Euro:
 
     @targetName("plus")
     def +(that: Euro): Euro = e + that
+    
+    def maybe: Option[Euro] = if e == Euro.zero then None else Some(e)
 
     def display: String = s"€${e / 100},${e % 100}"

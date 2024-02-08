@@ -1,9 +1,9 @@
 package org.sanssushi.sandbox.state
 
+import org.sanssushi.sandbox.state.CoffeeMaker.CMEvent.*
+import org.sanssushi.sandbox.state.CoffeeMaker.CMOut.*
+import org.sanssushi.sandbox.state.CoffeeMaker.CMState.*
 import org.sanssushi.sandbox.state.CoffeeMaker.Coffee.*
-import org.sanssushi.sandbox.state.CoffeeMaker.Event.*
-import org.sanssushi.sandbox.state.CoffeeMaker.Output.*
-import org.sanssushi.sandbox.state.CoffeeMaker.Status.*
 import org.sanssushi.sandbox.state.State.*
 import org.sanssushi.sandbox.state.common.Euro
 
@@ -11,7 +11,7 @@ import scala.math.Ordered.orderingToOrdered
 
 /** The finite-state machine of a coffee maker implemented with the state monad. */
 object CoffeeMaker:
-  
+
   /** Coffee products */
   enum Coffee derives CanEqual:
     case Espresso, DoubleEspresso, Americano, Latte, Cappuccino
@@ -24,50 +24,53 @@ object CoffeeMaker:
       case Cappuccino => Euro(2, 30)
 
   /** Event type */
-  enum Event derives CanEqual:
+  enum CMEvent derives CanEqual:
     case Selection(coffee: Coffee)
     case Payment(amount: Euro)
-    case Cancelled
-    case Completed
+    case Cancel
+    case PreparationComplete
 
   /** State type */
-  enum Status derives CanEqual:
+  enum CMState derives CanEqual:
     case Ready
     case CoffeeSelected(coffee: Coffee, paid: Euro = Euro.zero)
-    case PreparingCoffee(coffee: Coffee, change: Euro = Euro.zero)
+    case PreparingCoffee(coffee: Coffee)
 
   /** Output type */
-  enum Output:
+  enum CMOut derives CanEqual:
     case Out(msg: String, coffee: Option[Coffee] = None, change: Option[Euro] = None)
     case Unchanged
 
-  val startState: Status = Ready
-  val reset: State[Status, Output] = set(startState) >> unit(Out("Make your selection."))
-  val identity: State[Status, Output] = unit(Unchanged)
-
-  /** Finite-state machine of the coffee maker. */
-  val fsm: Transition[Event, Status, Output] = i => s =>
-    if outgoingTransitions(s).isDefinedAt(i)
-    then outgoingTransitions(s)(i)
-    else identity(s)
-
-  /** Outgoing transitions grouped by state S */
-  lazy val outgoingTransitions: Status => PartialFunction[Event, (Status, Output)] =
-
-    case Ready =>
+  /** Outgoing transitions grouped by state. */
+  val outgoingTransitions: CMState => PartialFunction[CMEvent, (CMState, CMOut)] =
+  
+    case Ready => {
       // coffee selected
       case Selection(c) => (CoffeeSelected(c), Out(s"Selected: $c, required payment: ${c.price.display}"))
-
+    }
+    
     case CoffeeSelected(coffee, paid) => {
-      // insufficient payment
+      // payment (insufficient)
       case Payment(p) if paid + p < coffee.price => (CoffeeSelected(coffee, paid + p),
         Out(s"Selected: $coffee, outstanding payment: ${(coffee.price - (paid + p)).display}"))
-      // payment complete
-      case Payment(p) => (PreparingCoffee(coffee, change = (paid + p) - coffee.price), Out(s"Preparing coffee."))
+      // payment (complete)
+      case Payment(p) =>
+        val change = (paid + p) - coffee.price
+        (PreparingCoffee(coffee), Out(s"Preparing coffee.", change = change.maybe))
       // order cancelled
-      case Cancelled => (Ready, Out(s"Make your selection.", change = Some(paid)))
+      case Cancel =>
+        (Ready, Out(s"Make your selection.", change = paid.maybe))
+    }
+    
+    case PreparingCoffee(coffee) => {
+      // preparation complete
+      case PreparationComplete => (Ready, Out(s"Make your selection.", Some(coffee)))
     }
 
-    case PreparingCoffee(coffee, change) =>
-      // preparation complete
-      case Completed => (Ready, Out(s"Make your selection.", Some(coffee), Some(change)))
+  /** Initial state of the coffee maker. */
+  val Init: CMState = Ready
+  /** Fallback transition pointing back to the same state with unchanged output. */
+  val Identity: State[CMState, CMOut] = unit(Unchanged)
+  /** Finite-state machine of the coffee maker. */
+  val FSM: Transition[CMEvent, CMState, CMOut] = e => s =>
+    outgoingTransitions(s).orElse(_ => Identity(s))(e)
