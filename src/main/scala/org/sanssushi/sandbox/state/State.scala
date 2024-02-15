@@ -59,16 +59,21 @@ object State:
   def sequence[S,A]: Seq[State[S, A]] => State[S, Seq[A]] =
     identity[State[S,A]].traverse
 
-  /** TC for combining state tuples.
+  /** TC for combining a tuple of state operations.
    * @see [[State.combine]] */
   opaque type Combiner[S, T <: Tuple, O <: Tuple] = T => State[S,O]
 
-  // TC instances
+  /** Base case: Combiner instance for the empty tuple
+   * @see [[State.Combiner]] */
+  given combineEmpty[S]: Combiner[S, EmptyTuple, EmptyTuple] = State.unit
 
-  // base case: empty tuple
-  given combineEmpty[S]: Combiner[S, EmptyTuple, EmptyTuple] = _ => State.unit(EmptyTuple)
-
-  // general case: combine a non empty tuple that starts with a State[S, HO]
+  /** General case: Combiner <code>State[S, HO] *: TL => State[S, HO *: TO]</code> for non empty tuples
+   * @param c using a combiner for the tail
+   * @tparam S the common type S for all tuple elements
+   * @tparam HO the output type of the head element
+   * @tparam TL the type of the tail elements
+   * @tparam TO the output type of the combined tail elements
+   * @see [[State.Combiner]] */
   given combineNonEmpty[S, HO, TL <: Tuple, TO <: Tuple]
   (using c: Combiner[S, TL, TO]): Combiner[S, State[S, HO] *: TL, HO *: TO] = t =>
     for
@@ -76,7 +81,11 @@ object State:
       to <- c(t.tail)
     yield ho *: to
 
-  // fallback: custom compile error
+  /** Fallback case: A more specific Combiner
+   * could not be created, which means we've got a type error. This <code>given</code>
+   * creates a comprehensible compile error instead of a Combiner instance.
+   * Note, the compiler will pick this (type-wise least specific) Combiner last.
+   * @see [[State.Combiner]] */
   inline given typeError[S, T <: Tuple, O <: Tuple]: Combiner[S, T, O] =
     compiletime.error(
       "Tuple does not conform to (State[S, A1], State[S, A2], ..., State[S, AN]) or\n" +
@@ -84,7 +93,8 @@ object State:
 
   /** Combine a tuple of state operations. Transforms
    * <code>(State[S, A1], State[S, A2], ..., State[S, AN])</code> to <code>State[S, (A1, A2, ..., AN)]</code> */
-  def combine[S, T <: Tuple, O <: Tuple](t: T)(using c: Combiner[S, T, O]): State[S, O] = c(t)
+  def combine[S, T <: Tuple, O <: Tuple](t: T)(using c: Combiner[S, T, O]): State[S, O] =
+    c(t)
 
 
 object Transition:
