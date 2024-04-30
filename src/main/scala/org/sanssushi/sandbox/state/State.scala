@@ -1,6 +1,6 @@
 package org.sanssushi.sandbox.state
 
-import scala.annotation.targetName
+import scala.annotation.{implicitNotFound, targetName}
 
 /** A stateful operation */
 type State[S, +A] = S => (S, A)
@@ -75,26 +75,18 @@ object State:
    * @tparam TO the output type of the combined tail elements
    * @see [[State.Combiner]] */
   given combineNonEmpty[S, HO, TL <: Tuple, TO <: Tuple]
-  (using c: Combiner[S, TL, TO]): Combiner[S, State[S, HO] *: TL, HO *: TO] = t =>
+  (using c : Combiner[S, TL, TO]): Combiner[S, State[S, HO] *: TL, HO *: TO] = t =>
     for
       ho <- t.head
       to <- c(t.tail)
     yield ho *: to
 
-  /** Fallback case: A more specific Combiner
-   * could not be created, which means we've got a type error. This <code>given</code>
-   * creates a comprehensible compile error instead of a Combiner instance.
-   * Note, the compiler will pick this (type-wise least specific) Combiner last.
-   * @see [[State.Combiner]] */
-  inline given typeError[S, T <: Tuple, O <: Tuple]: Combiner[S, T, O] =
-    compiletime.error(
-      "Tuple does not conform to (State[S, A1], State[S, A2], ..., State[S, AN]) or\n" +
-      "the combined type State[S, (A1, A2, ..., AN)] does match the expected result type.")
-
   /** Combine a tuple of state operations. Transforms
    * <code>(State[S, A1], State[S, A2], ..., State[S, AN])</code> to <code>State[S, (A1, A2, ..., AN)]</code> */
-  def combine[S, T <: Tuple, O <: Tuple](t: T)(using c: Combiner[S, T, O]): State[S, O] =
-    c(t)
+  def combine[S, T <: Tuple, O <: Tuple](t: T)(using @implicitNotFound(
+          "Tuple does not conform to (State[S, A1], State[S, A2], ..., State[S, AN]) or\n" +
+          "the combined type State[S, (A1, A2, ..., AN)] does match the expected result type"
+  ) c: Combiner[S, T, O]): State[S, O] = c(t)
 
 
 object Transition:
