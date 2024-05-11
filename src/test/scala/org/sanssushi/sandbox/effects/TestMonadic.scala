@@ -1,28 +1,33 @@
 package org.sanssushi.sandbox.effects
 
-import cats.effect.IO
-import cats.effect.testing.minitest.IOTestSuite
+import cats.effect.*
+import cats.effect.testing.scalatest.AsyncIOSpec
 import cats.syntax.parallel.*
-import F.util.*
-import org.sanssushi.sandbox.effects.Effects.{Reference, Resource, Semaphore, Signal}
+import org.sanssushi.sandbox.effects.MonadicEffects.{Reference,Signal,Resource,Semaphore}
+import org.sanssushi.sandbox.effects.F.util.*
+import org.scalatest.funsuite.AsyncFunSuite
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-object Test extends IOTestSuite:
-  override val timeout: FiniteDuration = 10.seconds
+class TestMonadic extends AsyncFunSuite with AsyncIOSpec with Matchers:
+
+  test("further self-evident truths"):
+      IO(1).asserting(_ shouldBe 1)
+
 
   test("reference: increments are atomic"):
 
-    def incAndGet(ref: Reference[IO, Int]): IO[Int] = ref.updateAndGet(x => x + 1)
     val n = 100000
     val oneToN = (1 to n).toList
 
     for
-      state <- Reference.pure[IO, Int](0)
-      incrementResults <- oneToN.parTraverse(_ => incAndGet(state)) // concurrent increments
+      ref <- Reference.pure[IO, Int](0)
+      incrementResults <- oneToN.parTraverse(_ => ref.updateAndGet(x => x + 1)) // concurrent increments
     yield
       val set = incrementResults.toSet
       assert(oneToN.forall(i => set.contains(i)))
+
 
   test("signal: is sent once"):
     for
@@ -32,6 +37,7 @@ object Test extends IOTestSuite:
       signalReceived <- signal.await
     yield assert(firstComplete && !secondComplete && signalReceived == Left(()))
 
+
   test("resource: is released on error"):
     for
       release <- Signal.unit[IO]
@@ -39,6 +45,7 @@ object Test extends IOTestSuite:
       _ <- resource.use(_ => F.error("boom!")).recover(_ => ())
       _ <- release.await
     yield assert(true)
+
 
   test("semaphore: lock is exclusive"):
 
@@ -57,5 +64,5 @@ object Test extends IOTestSuite:
           F.delay[IO, Unit](x.unsafeIncrement())
     yield assert(x.value == n)
 
-end Test
+end TestMonadic
 

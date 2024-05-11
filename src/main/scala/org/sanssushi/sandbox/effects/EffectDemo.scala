@@ -7,7 +7,7 @@ import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.parallel.*
 import cats.{Defer, Parallel}
-import org.sanssushi.sandbox.effects.Effects.*
+import org.sanssushi.sandbox.effects.MonadicEffects.*
 import org.sanssushi.sandbox.effects.F.util.*
 
 import scala.concurrent.duration.*

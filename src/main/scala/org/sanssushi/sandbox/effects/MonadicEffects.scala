@@ -11,7 +11,8 @@ import org.sanssushi.sandbox.effects.F.util.*
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 
-object Effects:
+/** Showcasing monadic effect composition by constructing a semaphore from simpler effects. */
+object MonadicEffects:
   
   /** Effect 1. Atomic access to a shared mutable state.
    *
@@ -236,4 +237,4 @@ object Effects:
 
   end Semaphore
 
-end Effects
+end MonadicEffects

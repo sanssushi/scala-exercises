@@ -48,7 +48,7 @@ the effect type and runs the effect is much richer than this implementation.
 It will provide convenience methods and predefined effects that'll make development easier. 
 For example, it will allow means to run effects in parallel, cancel effects or handle errors.
 
-In the code examples in [`org.sanssushi.sandbox.effects.Effects`](src/main/scala/org/sanssushi/sandbox/effects/Effects.scala) I use a generic effect type `F[_]`
+In the code examples in [`org.sanssushi.sandbox.effects.Effects`](src/main/scala/org/sanssushi/sandbox/effects/MonadicEffects.scala) I use a generic effect type `F[_]`
 to focus on the abstract structure and to remove the specifics of concrete effect
 types as much as possible (and that way the code can run on different effect systems.)
 
