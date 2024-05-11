@@ -1,5 +1,6 @@
 
-val scala3Version = "3.3.3"
+val scala3Version = "3.4.1"
+val catsEffectVersion = "3.5.4"
 
 lazy val root = project
   .in(file("."))
@@ -9,6 +10,8 @@ lazy val root = project
 
     scalaVersion := scala3Version,
 
+    fork := true,
+
     scalacOptions := Seq(
       "-feature",
       "-deprecation",
@@ -17,10 +20,10 @@ lazy val root = project
       "-source:future",
       "-unchecked"),
 
-    testFrameworks += new TestFramework("minitest.runner.Framework"),
-
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-effect" % "3.5.2",
-      "org.typelevel" %% "cats-effect-testing-minitest" % "1.5.0" % Test,
+      "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4",
+
+      "org.typelevel" %% "cats-effect" % catsEffectVersion,
+      "org.typelevel" %% "cats-effect-testing-scalatest" % "1.5.0" % Test,
     )
   )
