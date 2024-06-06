@@ -3,9 +3,10 @@
 ## Effects
 
 ### In Essence, What are Effect Types like IO About? 
-***And what is a side effect in computer programs in the first place?*** Every computation that isn't a pure function call
-is effectful, that is, every function call that cannot be memoized or, in other words, whose result cannot
-be stored in favor of calling the function again, e.g. `readChar()`.
+***And what is a side effect in computer programs in the first place?*** Every function that isn't pure
+is effectful, i.e. every function that is doing something else than just computing a value for a list of
+arguments and therefore cannot be memoized (that is, the results of calling the function cannot be
+stored in memory in favor of calling the function again, e.g. `readChar()`.)
 
 All real-world programs are full of effects: taking user input, writing stuff into
 the database, locking a shared resource, creating a timestamp, waiting for an asynchronous
